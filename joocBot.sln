@@ -1,0 +1,25 @@
+﻿
+Microsoft Visual Studio Solution File, Format Version 12.00
+# Visual Studio Version 17
+VisualStudioVersion = 17.6.33815.320
+MinimumVisualStudioVersion = 10.0.40219.1
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "joocBot", "joocBot\joocBot.csproj", "{0B4805B1-BCA6-43CB-B35A-B8EDD93C7FFF}"
+EndProject
+Global
+	GlobalSection(SolutionConfigurationPlatforms) = preSolution
+		Debug|Any CPU = Debug|Any CPU
+		Release|Any CPU = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(ProjectConfigurationPlatforms) = postSolution
+		{0B4805B1-BCA6-43CB-B35A-B8EDD93C7FFF}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{0B4805B1-BCA6-43CB-B35A-B8EDD93C7FFF}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{0B4805B1-BCA6-43CB-B35A-B8EDD93C7FFF}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{0B4805B1-BCA6-43CB-B35A-B8EDD93C7FFF}.Release|Any CPU.Build.0 = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(SolutionProperties) = preSolution
+		HideSolutionNode = FALSE
+	EndGlobalSection
+	GlobalSection(ExtensibilityGlobals) = postSolution
+		SolutionGuid = {0CFB02F3-821C-4D07-A8B2-391BB4694B2E}
+	EndGlobalSection
+EndGlobal
