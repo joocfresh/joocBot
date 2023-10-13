@@ -5,15 +5,15 @@ using System.Net;
 using System.Text;
 using System.Threading.Tasks;
 
-namespace joocBot.albion
+namespace joocBot.Albion
 {
-    enum RegionCode
+    public enum RegionCode
     {
         Default = 0,
         Eastern = 1,
         Western = 2,
     }
-    internal class AlbionApiRequestor : IDisposable
+    public class AlbionApiRequestor : IDisposable
     {
         private const string WESTERN_URL = "https://gameinfo.albiononline.com/api/gameinfo/";
         private const string EASTERN_URL = "https://gameinfo.albiononline.com/api/gameinfo/";

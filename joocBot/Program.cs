@@ -1,7 +1,7 @@
 ﻿using Discord;
 using Discord.Commands;
 using Discord.WebSocket;
-using joocBot.albion;
+using joocBot.Albion;
 using System;
 using System.Threading.Tasks;
 
@@ -39,7 +39,7 @@ namespace DiscordBot
             client.Log += OnClientLogReceived;
             commands.Log += OnClientLogReceived;
 
-            await client.LoginAsync(TokenType.Bot, "MTE1MjExMTI0MDI0MDQ0NzU4OA.GruXxd.Rv36BCoprQfc4GbJYpmh-sHwOewW62hg-GH45U"); //봇의 토큰을 사용해 서버에 로그인
+            await client.LoginAsync(TokenType.Bot, "MTE1MjExMTI0MDI0MDQ0NzU4OA.GofJ3Y.TtSdrm-4rQb4-F0Z41ZAxUAiJeIi1qEYMIwybw"); //봇의 토큰을 사용해 서버에 로그인
             await client.StartAsync();                         //봇이 이벤트를 수신하기 시작
 
             client.MessageReceived += OnClientMessage;         //봇이 메시지를 수신할 때 처리하도록 설정
