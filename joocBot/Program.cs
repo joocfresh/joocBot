@@ -2,6 +2,7 @@
 using Discord.Commands;
 using Discord.WebSocket;
 using joocBot.Albion;
+using joocBot.Repositories;
 using System;
 using System.Threading.Tasks;
 
@@ -9,8 +10,9 @@ namespace DiscordBot
 {
     class Program
     {
-        DiscordSocketClient client; //봇 클라이언트
-        CommandService commands;    //명령어 수신 클라이언트
+        DiscordSocketClient? client; //봇 클라이언트
+        CommandService? commands;    //명령어 수신 클라이언트
+        ChatBotRepository? _chatBot;
         /// <summary>
         /// 프로그램의 진입점
         /// </summary>
@@ -34,12 +36,14 @@ namespace DiscordBot
             {
                 LogLevel = LogSeverity.Verbose                              //봇의 로그 레벨 설정
             });
+            _chatBot = new ChatBotRepository();                             //봇의 토큰 가져오기
+            var token = _chatBot.GetToken().Token;
 
             //로그 수신 시 로그 출력 함수에서 출력되도록 설정
             client.Log += OnClientLogReceived;
             commands.Log += OnClientLogReceived;
 
-            await client.LoginAsync(TokenType.Bot, "MTE1MjExMTI0MDI0MDQ0NzU4OA.GofJ3Y.TtSdrm-4rQb4-F0Z41ZAxUAiJeIi1qEYMIwybw"); //봇의 토큰을 사용해 서버에 로그인
+            await client.LoginAsync(TokenType.Bot, token); //봇의 토큰을 사용해 서버에 로그인
             await client.StartAsync();                         //봇이 이벤트를 수신하기 시작
 
             client.MessageReceived += OnClientMessage;         //봇이 메시지를 수신할 때 처리하도록 설정
@@ -59,20 +63,22 @@ namespace DiscordBot
             var userMessage = message.Content.Replace(client.CurrentUser.Mention, string.Empty);
 
             //메시지 앞에 !이 달려있지 않고, 자신이 호출된게 아니거나 다른 봇이 호출했다면 취소
-            var isPrefix = userMessage.StartsWith(" !");
-            var isBotSelf = message.HasMentionPrefix(client.CurrentUser, ref pos);
+            var isPrefix = userMessage.StartsWith(" /");
+            var isBotCallAsSelf = message.HasMentionPrefix(client.CurrentUser, ref pos);
             var isAuthor = message.Author.IsBot;
 
-            if (!(isPrefix || isBotSelf) || isAuthor)
+            if (!isPrefix || !isBotCallAsSelf || isAuthor)
                 return;
 
             var prefix = userMessage.Substring(2).Split(' ')[0];
+            var postfix = userMessage.Substring(2).Split(' ')[1];
 
             // case insensitive
-            switch(prefix.ToLower())
+            switch (prefix.ToLower())
             {
-                case "echo":
-                case "e":
+                case "echo":case "e":
+                case "따라해":
+                case "앵무새":
                     returnMessage = userMessage.Substring(2 + prefix.Length);
                     break;
                 case "killlog":
@@ -80,17 +86,19 @@ namespace DiscordBot
 
                     using(AlbionApiRequestor requestor = new AlbionApiRequestor())
                     {
-
+                        returnMessage = requestor.SearchUsername(postfix);
                     }
 
-                    returnMessage = "대략 킬로그를 불러온다.";
+                    //returnMessage = "대략 킬로그를 불러온다.";
                     break;
                 case "help":
                 case "h":
+                case "도움말":
+                case "하이구글리":
                     returnMessage = "도움말 불러오기";
                     break;
                 default:
-                    returnMessage = "존재하지 않는 명령어 도움말은 !help";
+                    returnMessage = "존재하지 않는 명령어 도움말은 /help, /h ,/도움말, /하이구글리";
                     break;
             }
 

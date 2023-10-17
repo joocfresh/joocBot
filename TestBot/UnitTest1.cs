@@ -39,7 +39,8 @@ namespace TestBot
                 Region = RegionCode.Eastern
             };
 
-            var apiResponse = albionApi.SearchUsername("ChingChangChong");
+            //var apiResponse = albionApi.SearchUsername("ChingChangChong");
+            var apiResponse = albionApi.SearchUsername("mono1y");
         }
         #endregion
     }

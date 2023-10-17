@@ -16,9 +16,15 @@ namespace joocBot.Albion
     public class AlbionApiRequestor : IDisposable
     {
         private const string WESTERN_URL = "https://gameinfo.albiononline.com/api/gameinfo/";
-        private const string EASTERN_URL = "https://gameinfo.albiononline.com/api/gameinfo/";
-        public AlbionApiRequestor() { }
-        public AlbionApiRequestor(string apiKey) { } 
+        private const string EASTERN_URL = "https://gameinfo-sgp.albiononline.com/api/gameinfo/";
+        public AlbionApiRequestor() 
+        {
+            Region = RegionCode.Default;
+        }
+        public AlbionApiRequestor(string apiKey) 
+        {
+            Region = RegionCode.Default;
+        } 
 
         public string BaseURL { get; private set; } = string.Empty;
 
