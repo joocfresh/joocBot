@@ -13,6 +13,7 @@ namespace DiscordBot
         DiscordSocketClient? client; //봇 클라이언트
         CommandService? commands;    //명령어 수신 클라이언트
         ChatBotRepository? _chatBot;
+        AlbionQueryManager? _lbionQueryManager;
         /// <summary>
         /// 프로그램의 진입점
         /// </summary>
@@ -38,6 +39,8 @@ namespace DiscordBot
             });
             _chatBot = new ChatBotRepository();                             //봇의 토큰 가져오기
             var token = _chatBot.GetToken().Token;
+
+            _lbionQueryManager = new AlbionQueryManager();                  //알비온 쿼리매니저 생성
 
             //로그 수신 시 로그 출력 함수에서 출력되도록 설정
             client.Log += OnClientLogReceived;
@@ -69,33 +72,43 @@ namespace DiscordBot
 
             if (!isPrefix || !isBotCallAsSelf || isAuthor)
                 return;
-
-            var prefix = userMessage.Substring(2).Split(' ')[0];
-            var postfix = userMessage.Substring(2).Split(' ')[1];
+            string command = string.Empty;
+            string param = string.Empty;
+            if (userMessage.Substring(2).Contains(" "))
+            {
+                command = userMessage.Substring(2).Split(' ')[0];
+                param = userMessage.Substring(2).Split(' ')[1];
+            }
+            else
+                command = userMessage.Substring(2);
 
             // case insensitive
-            switch (prefix.ToLower())
+            switch (command.ToLower())
             {
-                case "echo":case "e":
+                case "echo":
+                case "e":
                 case "따라해":
                 case "앵무새":
-                    returnMessage = userMessage.Substring(2 + prefix.Length);
+                    returnMessage = userMessage.Substring(2 + command.Length);
                     break;
-                case "killlog":
-                case "k":
-
-                    using(AlbionApiRequestor requestor = new AlbionApiRequestor())
-                    {
-                        returnMessage = requestor.SearchUsername(postfix);
-                    }
-
-                    //returnMessage = "대략 킬로그를 불러온다.";
-                    break;
-                case "help":
                 case "h":
+                case "help":
                 case "도움말":
                 case "하이구글리":
                     returnMessage = "도움말 불러오기";
+                    break;
+                case "killlog":
+                case "k":
+                    using(AlbionApiRequestor requestor = new AlbionApiRequestor())
+                    {
+                        returnMessage = requestor.SearchUsername(param);
+                    }
+                    break;
+                case "status":
+                    returnMessage = _lbionQueryManager.GetRegion();
+                    break;
+                case "유저검색":
+                    returnMessage = _lbionQueryManager.ConvertNameToId(param);
                     break;
                 default:
                     returnMessage = "존재하지 않는 명령어 도움말은 /help, /h ,/도움말, /하이구글리";
