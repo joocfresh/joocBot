@@ -125,13 +125,52 @@ namespace joocBot.Albion
             }
            return _requestor.Region.ToString();
         }
-        public string ConvertNameToId(string username)
+        public List<Player> SearchPlayers(string username)
         {
             var jsonString = _requestor.SearchUsername(username);
             var jsonObject = JsonConvert.DeserializeObject<Search>(jsonString);
 
-            var results = jsonObject?? new List<string> : jsonObject.players.Select(p => p.Id).ToList();
-            return "";
+            var results = (jsonObject == null)
+                ? new List<Player>()
+                : jsonObject.players.ToList();
+            return results;
+        }
+        public List<string> ConvertNameToId(string username)
+        {
+            var jsonString = _requestor.SearchUsername(username);
+            var jsonObject = JsonConvert.DeserializeObject<Search>(jsonString);
+
+            var results = (jsonObject == null)
+                ? new List<string>()
+                : jsonObject.players.Select(p => p.Id).ToList();
+            return results;
+        }
+        public string ConvertNameToIdOne(string username)
+        {
+            var jsonString = _requestor.SearchUsername(username);
+            var jsonObject = JsonConvert.DeserializeObject<Search>(jsonString);
+
+            var results = (jsonObject == null)
+                ? string.Empty
+                : jsonObject.players.Select(p => p.Id).ToList()[0];
+            return results;
+        }
+        public List<BattleEvent> SearchPlayersKills(string username)
+        {
+            var id = ConvertNameToIdOne(username);
+            var param = string.Empty;
+            if (string.IsNullOrEmpty(id))
+                param = username;
+            else
+                param = id;
+
+            var jsonString = _requestor.Kills(param);
+            var jsonObject = JsonConvert.DeserializeObject<List<BattleEvent>>(jsonString);
+
+            var results = (jsonObject == null)
+                ? new List<BattleEvent>()
+                : jsonObject;
+            return results;
         }
     }
 }

@@ -4,6 +4,7 @@ using Discord.WebSocket;
 using joocBot.Albion;
 using joocBot.Repositories;
 using System;
+using System.Text;
 using System.Threading.Tasks;
 
 namespace DiscordBot
@@ -50,7 +51,7 @@ namespace DiscordBot
             await client.StartAsync();                         //봇이 이벤트를 수신하기 시작
 
             client.MessageReceived += OnClientMessage;         //봇이 메시지를 수신할 때 처리하도록 설정
-
+            
             await Task.Delay(-1);   //봇이 종료되지 않도록 블로킹
         }
 
@@ -99,16 +100,20 @@ namespace DiscordBot
                     break;
                 case "killlog":
                 case "k":
-                    using(AlbionApiRequestor requestor = new AlbionApiRequestor())
-                    {
-                        returnMessage = requestor.SearchUsername(param);
-                    }
+                    _lbionQueryManager.SearchPlayersKills(param);
                     break;
                 case "status":
                     returnMessage = _lbionQueryManager.GetRegion();
                     break;
-                case "유저검색":
-                    returnMessage = _lbionQueryManager.ConvertNameToId(param);
+                case "search":
+                case "검색":
+                    var playerList = new StringBuilder();
+                    foreach (var item in _lbionQueryManager.SearchPlayers(param))
+                        playerList.AppendLine($"{item.Id} : [{item.GuildName}]{item.Name} K/D({item.KillFame}/{item.DeathFame}) Ratio({item.FameRatio})");
+                    returnMessage = $"\n ## **Player List**: \n ```\n{playerList.ToString()}``` ";
+
+                    if (playerList.Length == 0)
+                        returnMessage = "```검색결과 찾을 수 없음.```";
                     break;
                 default:
                     returnMessage = "존재하지 않는 명령어 도움말은 /help, /h ,/도움말, /하이구글리";
@@ -119,6 +124,28 @@ namespace DiscordBot
             var context = new SocketCommandContext(client, message);                    //수신된 메시지에 대한 컨텍스트 생성   
 
             await context.Channel.SendMessageAsync($"명령어 수신됨 - {returnMessage}"); //수신된 명령어를 다시 보낸다.
+            
+
+            var embed = new EmbedBuilder
+            {
+                // Embed property can be set within object initializer
+                Title = "Hello world!",
+                Description = "I am a description set by initializer."
+            };
+            // Or with methods
+            embed.AddField("Field title",
+                "Field value. I also support [hyperlink markdown](https://example.com)!")
+                .WithAuthor(client.CurrentUser)
+                .WithFooter(footer => footer.Text = "I am a footer.")
+                .WithColor(Color.Green)
+                .WithTitle("I overwrote \"Hello world!\"")
+                .WithDescription("I am a description.")
+                .WithUrl("https://example.com")
+                .WithCurrentTimestamp();
+
+            //Your embed needs to be built before it is able to be sent
+            await context.Channel.SendMessageAsync(embed: embed.Build());
+            await context.Channel.SendMessageAsync("## Powered by GooglyMoogly");
         }
 
         /// <summary>

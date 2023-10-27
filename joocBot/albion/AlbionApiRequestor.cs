@@ -90,6 +90,36 @@ namespace joocBot.Albion
                 return $"실패했습니다. 왜 그랬을까요?: [m:{e.Message}] [stack:{e.StackTrace}] [src:{e.Source}]";
             }
         }
+        public string Kills(string id)
+        {
+            string result = string.Empty;
+            try
+            {
+                result = CallWebRequest($"players/{id}/kills");
+
+                return result;
+            }
+            catch (Exception e)
+            {
+
+                return $"실패했습니다. 왜 그랬을까요?: [m:{e.Message}] [stack:{e.StackTrace}] [src:{e.Source}]";
+            }
+        }
+        public string Deaths(string id)
+        {
+            string result = string.Empty;
+            try
+            {
+                result = CallWebRequest($"players/{id}/deaths");
+
+                return result;
+            }
+            catch (Exception e)
+            {
+
+                return $"실패했습니다. 왜 그랬을까요?: [m:{e.Message}] [stack:{e.StackTrace}] [src:{e.Source}]";
+            }
+        }
 
         public void Dispose()
         {

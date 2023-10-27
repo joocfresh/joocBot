@@ -6,21 +6,23 @@ using System.Threading.Tasks;
 
 namespace joocBot.Models
 {
-    public class Player
+    public class Inspection
     {
-        public string Id { get; set; } = string.Empty;
-        public string Name { get; set; } = string.Empty;
+        public double AverageItemPower { get; set; }
+        public Equipment Equipment { get; set; }
+        public Gear[] Inventory { get; set; }
+        public string Name { get; set; }
+        public string Id { get; set; }
         public string GuildId { get; set; } = string.Empty;
         public string GuildName { get; set; } = string.Empty;
         public string AllianceId { get; set; } = string.Empty;
         public string AllianceName { get; set; } = string.Empty;
-        public string Avatar { get; set; } = string.Empty;
-        public string AvatarRing { get; set; } = string.Empty;
+        public string AllianceTag { get; set; } = string.Empty;
+        public string Avatar { get; set; }
+        public string AvatarRing { get; set;}
         public long KillFame { get; set; } = default;
         public long DeathFame { get; set; } = default;
         public float FameRatio { get; set; } = default;
-        public object? totalKills { get; set; }
-        public object? gvgKills { get; set; }
-        public object? gvgWon { get; set; }
+        public LifetimeStatistics LifetimeStatistics {  get; set; }
     }
 }

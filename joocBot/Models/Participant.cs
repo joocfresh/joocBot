@@ -6,9 +6,9 @@ using System.Threading.Tasks;
 
 namespace joocBot.Models
 {
-    public class Search
+    public class Participant : Inspection
     {
-        public Guild[] guilds;
-        public Player[] players;
+        public double DamageDone { get; set; }
+        public double SupportHealingDone { get; set; }
     }
 }
