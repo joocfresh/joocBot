@@ -8,7 +8,7 @@ namespace joocBot.Repositories
 {
     public interface IRepository<T>
     {
-        IEnumerable<T> GetAll();
+        IEnumerable<T>? GetAll();
         bool SaveOne(T session);
         bool DeleteOne(T session);
         bool Exist(T session);
