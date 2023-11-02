@@ -13,13 +13,15 @@ namespace joocBot.Albion
     {
         public AlbionQueryManager() 
         {
-            _requestor = new AlbionApiRequestor();
-            _requestor.Region = (RegionCode)LoadRegion();
+            _requestor = new AlbionApiRequestor
+            {
+                Region = (RegionCode)LoadRegion()
+            };
         }
-        private AlbionApiRequestor _requestor;
+        private readonly AlbionApiRequestor _requestor;
         private const string DIRECTORY = "./Project/";
         private const string FILE = "AlbionQueryManager.env";
-        private int LoadRegion()
+        private static int LoadRegion()
         {
             string path = Path.Combine(DIRECTORY, FILE);
             string region = string.Empty;
@@ -39,10 +41,10 @@ namespace joocBot.Albion
                 }
 
                 // 파일에서 API 토큰 및 지역 정보 읽기
-                Dictionary<string, string> settings = new Dictionary<string, string>();
-                using (StreamReader reader = new StreamReader(path))
+                var settings = new Dictionary<string, string>();
+                using (var reader = new StreamReader(path))
                 {
-                    string line;
+                    string? line;
                     while ((line = reader.ReadLine()) != null)
                     {
                         string[] parts = line.Split('=');
@@ -72,7 +74,7 @@ namespace joocBot.Albion
             }
         }
 
-        private int SaveRegion(int code) 
+        private static int SaveRegion(int code) 
         {
             string path = Path.Combine(DIRECTORY, FILE);
             try
@@ -89,7 +91,7 @@ namespace joocBot.Albion
                     {
                     }
                 }
-                using (StreamWriter writer = new StreamWriter(path))
+                using (var writer = new StreamWriter(path))
                 {
                     writer.WriteLine($"Region={code}");
                 }
@@ -107,24 +109,35 @@ namespace joocBot.Albion
         { 
             return _requestor.Region.ToString();
         }
+        //public string SetRegion(string embeddedCode)
+        //{
+        //    switch (embeddedCode)
+        //    {
+        //        case "W":
+        //        case "w":
+        //            _requestor.Region = (RegionCode)SaveRegion((int)RegionCode.Western);
+        //            break;
+        //        case "E":
+        //        case "e":
+        //            _requestor.Region = (RegionCode)SaveRegion((int)RegionCode.Eastern);
+        //            break;
+        //        default:
+        //            _requestor.Region = (RegionCode)SaveRegion((int)RegionCode.Default);
+        //            break;
+        //    }
+        //    return _requestor.Region.ToString();
+        //}
         public string SetRegion(string embeddedCode)
         {
-            switch (embeddedCode)
+            _requestor.Region = embeddedCode switch
             {
-                case "W":
-                case "w":
-                    _requestor.Region = (RegionCode)SaveRegion((int)RegionCode.Western);
-                    break;
-                case "E":
-                case "e":
-                    _requestor.Region = (RegionCode)SaveRegion((int)RegionCode.Eastern);
-                    break;
-                default:
-                    _requestor.Region = (RegionCode)SaveRegion((int)RegionCode.Default);
-                    break;
-            }
-           return _requestor.Region.ToString();
+                "W" or "w" => (RegionCode)SaveRegion((int)RegionCode.Western),
+                "E" or "e" => (RegionCode)SaveRegion((int)RegionCode.Eastern),
+                _ => (RegionCode)SaveRegion((int)RegionCode.Default),
+            };
+            return _requestor.Region.ToString();
         }
+        #pragma warning disable CS8604 // 가능한 null 참조 인수입니다.
         public List<Player> SearchPlayers(string username)
         {
             var jsonString = _requestor.SearchUsername(username);
@@ -155,22 +168,79 @@ namespace joocBot.Albion
                 : jsonObject.players.Select(p => p.Id).ToList()[0];
             return results;
         }
-        public List<BattleEvent> SearchPlayersKills(string username)
+
+        public List<BattleEvent> SearchPlayersEvents(string username)
         {
             var id = ConvertNameToIdOne(username);
-            var param = string.Empty;
+            string param;
             if (string.IsNullOrEmpty(id))
                 param = username;
             else
                 param = id;
 
-            var jsonString = _requestor.Kills(param);
-            var jsonObject = JsonConvert.DeserializeObject<List<BattleEvent>>(jsonString);
+            var killJson = _requestor.Kills(param);
+            var deathJson = _requestor.Deaths(param);
+            var kills = JsonConvert.DeserializeObject<List<BattleEvent>>(killJson) ?? new List<BattleEvent>();
+            var deaths = JsonConvert.DeserializeObject<List<BattleEvent>>(deathJson) ?? new List<BattleEvent>();
 
-            var results = (jsonObject == null)
-                ? new List<BattleEvent>()
-                : jsonObject;
+            var jsonObject = new List<BattleEvent>();
+            jsonObject.AddRange(deaths);
+            jsonObject.AddRange(kills);
+
+            //var results = (jsonObject == null)
+            //    ? new List<BattleEvent>()
+            //    : jsonObject;
+
+            var results = jsonObject.OrderByDescending(be=>be.BattleId).ToList();
             return results;
+        }
+        public BattleEvent SearchPlayersRecentEvent(string username)
+        {
+            return SearchPlayersEvents(username).First();
+        }
+        public List<BattleEvent> SearchPlayersKills(string username)
+        {
+            var id = ConvertNameToIdOne(username);
+            string param;
+            if (string.IsNullOrEmpty(id))
+                param = username;
+            else
+                param = id;
+
+            var killJson = _requestor.Kills(param);
+            var kills = JsonConvert.DeserializeObject<List<BattleEvent>>(killJson) ?? new List<BattleEvent>();
+
+            var jsonObject = new List<BattleEvent>();
+            jsonObject.AddRange(kills);
+
+            var results = jsonObject.OrderByDescending(be => be.BattleId).ToList();
+            return results;
+        }
+        public BattleEvent SearchPlayersRecentKill(string username)
+        {
+            return SearchPlayersKills(username).First();
+        }
+        public List<BattleEvent> SearchPlayersDeaths(string username)
+        {
+            var id = ConvertNameToIdOne(username);
+            string param;
+            if (string.IsNullOrEmpty(id))
+                param = username;
+            else
+                param = id;
+
+            var deathJson = _requestor.Deaths(param);
+            var deaths = JsonConvert.DeserializeObject<List<BattleEvent>>(deathJson) ?? new List<BattleEvent>();
+
+            var jsonObject = new List<BattleEvent>();
+            jsonObject.AddRange(deaths);
+
+            var results = jsonObject.OrderByDescending(be => be.BattleId).ToList();
+            return results;
+        }
+        public BattleEvent SearchPlayersRecentDeath(string username)
+        {
+            return SearchPlayersDeaths(username).First();
         }
     }
 }

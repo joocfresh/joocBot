@@ -13,7 +13,7 @@ namespace joocBot.Albion
         Eastern = 1,
         Western = 2,
     }
-    public class AlbionApiRequestor : IDisposable
+    public class AlbionApiRequestor
     {
         private const string WESTERN_URL = "https://gameinfo.albiononline.com/api/gameinfo/";
         private const string EASTERN_URL = "https://gameinfo-sgp.albiononline.com/api/gameinfo/";
@@ -21,10 +21,6 @@ namespace joocBot.Albion
         {
             Region = RegionCode.Default;
         }
-        public AlbionApiRequestor(string apiKey) 
-        {
-            Region = RegionCode.Default;
-        } 
 
         public string BaseURL { get; private set; } = string.Empty;
 
@@ -50,22 +46,22 @@ namespace joocBot.Albion
                 }
             }
         }
+        // Disable the warning.
+        #pragma warning disable SYSLIB0014
         private string CallWebRequest(string fuctionURL)
         {
             string responseFromServer = string.Empty;
 
             try
             {
-                WebRequest request = WebRequest.Create(BaseURL+ fuctionURL);
+                WebRequest request = WebRequest.Create(BaseURL + fuctionURL);
                 request.Method = "GET";
                 request.ContentType = "application/json";
                 request.Headers["user-agent"] = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/116.0.0.0 Safari/537.36";
-                using (WebResponse response = request.GetResponse())
-                using (Stream dataStream = response.GetResponseStream())
-                using (StreamReader reader = new StreamReader(dataStream))
-                {
-                    responseFromServer = reader.ReadToEnd();
-                }
+                using WebResponse response = request.GetResponse();
+                using Stream dataStream = response.GetResponseStream();
+                using var reader = new StreamReader(dataStream);
+                responseFromServer = reader.ReadToEnd();
 
             }
             catch (Exception e)
@@ -77,7 +73,7 @@ namespace joocBot.Albion
         }
         public string SearchUsername(string username)
         {
-            string result = string.Empty;
+            string result;
             try
             {
                 result = CallWebRequest($"search?q={username}");
@@ -92,7 +88,7 @@ namespace joocBot.Albion
         }
         public string Kills(string id)
         {
-            string result = string.Empty;
+            string result;
             try
             {
                 result = CallWebRequest($"players/{id}/kills");
@@ -107,7 +103,7 @@ namespace joocBot.Albion
         }
         public string Deaths(string id)
         {
-            string result = string.Empty;
+            string result;
             try
             {
                 result = CallWebRequest($"players/{id}/deaths");
@@ -119,10 +115,6 @@ namespace joocBot.Albion
 
                 return $"실패했습니다. 왜 그랬을까요?: [m:{e.Message}] [stack:{e.StackTrace}] [src:{e.Source}]";
             }
-        }
-
-        public void Dispose()
-        {
         }
     }
 }

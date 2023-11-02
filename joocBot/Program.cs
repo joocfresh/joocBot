@@ -19,7 +19,7 @@ namespace DiscordBot
         /// 프로그램의 진입점
         /// </summary>
         /// <param name="args"></param>
-        static void Main(string[] args)
+        static void Main()
         {
             new Program().BotMain().GetAwaiter().GetResult();   //봇의 진입점 실행
         }
@@ -54,12 +54,16 @@ namespace DiscordBot
             
             await Task.Delay(-1);   //봇이 종료되지 않도록 블로킹
         }
-
+        // Disable the warning.
+        #pragma warning disable CS8602
         private async Task OnClientMessage(SocketMessage arg)
         {
             //수신한 메시지가 사용자가 보낸 게 아닐 때 취소
-            var message = arg as SocketUserMessage;
-            if (message == null) return;
+            //var message = arg as SocketUserMessage;
+            //if (message == null) return;
+
+            //수신한 메시지가 사용자가 보낸 게 아닐 때 취소
+            if (arg is not SocketUserMessage message) return;
 
             int pos = 0;
 
@@ -75,13 +79,13 @@ namespace DiscordBot
                 return;
             string command = string.Empty;
             string param = string.Empty;
-            if (userMessage.Substring(2).Contains(" "))
+            if (userMessage[2..].Contains(' '))
             {
-                command = userMessage.Substring(2).Split(' ')[0];
-                param = userMessage.Substring(2).Split(' ')[1];
+                command = userMessage[2..].Split(' ')[0];
+                param = userMessage[2..].Split(' ')[1];
             }
             else
-                command = userMessage.Substring(2);
+                command = userMessage[2..];
 
             // case insensitive
             switch (command.ToLower())
@@ -90,7 +94,7 @@ namespace DiscordBot
                 case "e":
                 case "따라해":
                 case "앵무새":
-                    returnMessage = userMessage.Substring(2 + command.Length);
+                    returnMessage = userMessage[(2 + command.Length)..];
                     break;
                 case "h":
                 case "help":
@@ -100,7 +104,7 @@ namespace DiscordBot
                     break;
                 case "killlog":
                 case "k":
-                    _lbionQueryManager.SearchPlayersKills(param);
+                    _lbionQueryManager.SearchPlayersRecentEvent(param);
                     break;
                 case "status":
                     returnMessage = _lbionQueryManager.GetRegion();
@@ -110,7 +114,7 @@ namespace DiscordBot
                     var playerList = new StringBuilder();
                     foreach (var item in _lbionQueryManager.SearchPlayers(param))
                         playerList.AppendLine($"{item.Id} : [{item.GuildName}]{item.Name} K/D({item.KillFame}/{item.DeathFame}) Ratio({item.FameRatio})");
-                    returnMessage = $"\n ## **Player List**: \n ```\n{playerList.ToString()}``` ";
+                    returnMessage = $"\n ## **Player List**: \n ```\n{playerList}``` ";
 
                     if (playerList.Length == 0)
                         returnMessage = "```검색결과 찾을 수 없음.```";

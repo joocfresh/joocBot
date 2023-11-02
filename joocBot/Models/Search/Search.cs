@@ -8,7 +8,7 @@ namespace joocBot.Models
 {
     public class Search
     {
-        public Guild[] guilds;
-        public Player[] players;
+        public Guild[]? guilds;
+        public Player[]? players;
     }
 }
