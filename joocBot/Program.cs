@@ -104,7 +104,12 @@ namespace DiscordBot
                     break;
                 case "killlog":
                 case "k":
-                    _lbionQueryManager.SearchPlayersRecentEvent(param);
+                    var id = _lbionQueryManager.ConvertNameToIdOne(param);
+                    var killEvent = _lbionQueryManager.SearchPlayersRecentEvent(param);
+                    if (killEvent.Killer.Id == id)
+                        returnMessage = $"{killEvent.Victim.Name}를 맛있게 죽임 킬페임{killEvent.TotalVictimKillFame}";
+                    else
+                        returnMessage = $"{killEvent.Killer.Name}한테 으앙듁끔^^ 데스페임{killEvent.TotalVictimKillFame}";
                     break;
                 case "status":
                     returnMessage = _lbionQueryManager.GetRegion();
