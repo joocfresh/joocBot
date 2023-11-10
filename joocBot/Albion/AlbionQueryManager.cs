@@ -21,6 +21,7 @@ namespace joocBot.Albion
         private readonly AlbionApiRequestor _requestor;
         private const string DIRECTORY = "./Project/";
         private const string FILE = "AlbionQueryManager.env";
+
         private static int LoadRegion()
         {
             string path = Path.Combine(DIRECTORY, FILE);
@@ -73,7 +74,6 @@ namespace joocBot.Albion
                 return 0;
             }
         }
-
         private static int SaveRegion(int code) 
         {
             string path = Path.Combine(DIRECTORY, FILE);
@@ -107,26 +107,8 @@ namespace joocBot.Albion
 
         public string GetRegion() 
         { 
-            return _requestor.Region.ToString();
+            return $"알비온 서버: {_requestor.Region.ToString()} (디폴트:동부)";
         }
-        //public string SetRegion(string embeddedCode)
-        //{
-        //    switch (embeddedCode)
-        //    {
-        //        case "W":
-        //        case "w":
-        //            _requestor.Region = (RegionCode)SaveRegion((int)RegionCode.Western);
-        //            break;
-        //        case "E":
-        //        case "e":
-        //            _requestor.Region = (RegionCode)SaveRegion((int)RegionCode.Eastern);
-        //            break;
-        //        default:
-        //            _requestor.Region = (RegionCode)SaveRegion((int)RegionCode.Default);
-        //            break;
-        //    }
-        //    return _requestor.Region.ToString();
-        //}
         public string SetRegion(string embeddedCode)
         {
             _requestor.Region = embeddedCode switch
@@ -135,8 +117,9 @@ namespace joocBot.Albion
                 "E" or "e" => (RegionCode)SaveRegion((int)RegionCode.Eastern),
                 _ => (RegionCode)SaveRegion((int)RegionCode.Default),
             };
-            return _requestor.Region.ToString();
+            return $"알비온 서버: {_requestor.Region.ToString()} (방금설정됨)";
         }
+
         #pragma warning disable CS8604 // 가능한 null 참조 인수입니다.
         public List<Player> SearchPlayers(string username)
         {
