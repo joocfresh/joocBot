@@ -6,6 +6,7 @@ using joocBot.Models;
 using joocBot.Repositories;
 using System;
 using System.Text;
+using System.Threading.Channels;
 using System.Threading.Tasks;
 
 namespace DiscordBot
@@ -16,6 +17,7 @@ namespace DiscordBot
         private CommandService? _commands;    //명령어 수신 클라이언트
         private ChatBotRepository? _chatBot;
         private AlbionQueryManager? _lbionQueryManager;
+        private List<SubscribedChannel> _SubscribedChannelList = new List<SubscribedChannel>();
         private bool _isMessageShow;
         private bool _isEmbedShow;
         private bool _isSubEmbedShow;
@@ -101,19 +103,23 @@ namespace DiscordBot
             else
                 command = userMessage[2..];
 
+            _isEmbedShow = false;
+            _isMessageShow = false;
             _isSubEmbedShow = false;
             // case insensitive
+            var context = new SocketCommandContext(_client, message);                   //수신된 메시지에 대한 컨텍스트 생성   
+            var channelid = context.Channel.Id;
 
             switch (command.ToLower())
             {
                 case "e":case "echo":case "에코":case "테스트":
                     var offset = 2 + command.Length;
                     returnMessage = GetEchoMessage(userMessage, offset);
-                    _isMessageShow = true; _isEmbedShow = false;
+                    _isMessageShow = true;
                     break;
                 case "h":case "help":case "도움말":case "하이구글리":
                     returnMessage = GetHelpMessage();
-                    _isMessageShow = true; _isEmbedShow = false;
+                    _isMessageShow = true;
                     break;
                 case "k":case "killlog": case "킬": case "킬로그":
                     var id = _lbionQueryManager.ConvertNameToIdOne(param);
@@ -124,8 +130,25 @@ namespace DiscordBot
                     _isSubEmbedShow = (inventoryCount > 0)? true:false; _isMessageShow = true; _isEmbedShow = true;
                     break;
                 case "subscribe":case "구독":
-                    returnMessage = "이 채팅방에서 구독을 시작합니다.";
-                    _isMessageShow = true; _isEmbedShow = true;
+                    var isRegistered = _SubscribedChannelList.Exists(channel => channel.Id == channelid);
+                    if (!isRegistered)
+                        _SubscribedChannelList.Add(new SubscribedChannel 
+                        { 
+                            Id = channelid,
+                            IsAuthorized = false,
+                            IsSubscribed = false,
+                            Name = context.Channel.Name,
+                            Description = string.Empty,
+                        });
+
+                    _ = ExecuteSubscription(channelid, context);
+                    returnMessage = $"[{context.Guild.Name}]#{context.Channel.Name}:{channelid}에서 이벤트 구독을 시작합니다.";
+                    _isMessageShow = true;
+                    break;
+                case "unsubscribe": case "구독중지":
+                    _ = TerminateSubscription(channelid, context);
+                    returnMessage = $"[{context.Guild.Name}]#{context.Channel.Name}:{channelid}에서 이벤트 구독을 중지합니다.";
+                    _isMessageShow = true;
                     break;
                 case "server":case "서버":
                     returnMessage = string.IsNullOrWhiteSpace(param)?_lbionQueryManager.GetRegion(): _lbionQueryManager.SetRegion(param);
@@ -136,12 +159,10 @@ namespace DiscordBot
                     _isMessageShow = true; _isEmbedShow = false;
                     break;
                 default:
-                    returnMessage = "존재하지 않는 명령어임! \n도움말은 /h, /help, /도와줘, /하이구글리 \n";
-                    _isMessageShow = true; _isEmbedShow = false;
+                    returnMessage = "존재하지 않는 명령어임! \n도움말은 /h, /help, /도움말, /하이구글리 \n";
+                    _isMessageShow = true;
                     break;
             }
-
-            var context = new SocketCommandContext(_client, message);                   //수신된 메시지에 대한 컨텍스트 생성   
 
             if (_isMessageShow)
                 await context.Channel.SendMessageAsync($"명령어 수신됨 - {returnMessage}"); //수신된 명령어를 다시 보낸다.
@@ -151,6 +172,30 @@ namespace DiscordBot
             if (_isSubEmbedShow)
                 await context.Channel.SendMessageAsync(embed: subEmbed.Build());
         }
+        private async Task ExecuteSubscription(ulong key, SocketCommandContext context)
+        {
+            var subscriptionInfo = _SubscribedChannelList.FirstOrDefault(item => item.Id == key);
+            if (subscriptionInfo == null)
+                return;
+            await Task.Run(async () =>
+            {
+                while (subscriptionInfo.IsSubscribed == true)
+                {
+                    await context.Channel.SendMessageAsync($"구독중... {subscriptionInfo.Name}");
+                    Thread.Sleep(5000);
+                }
+                //await context.Channel.SendMessageAsync($"구독중지. {subscriptionInfo.Name}");
+            });
+        }
+        private async Task TerminateSubscription(ulong key, SocketCommandContext context)
+        {
+            var subscriptionInfo = _SubscribedChannelList.FirstOrDefault(item => item.Id == key);
+            if (subscriptionInfo == null)
+                return;
+            await context.Channel.SendMessageAsync($"구독을 정지합니다. {subscriptionInfo.Name}");
+            subscriptionInfo.IsSubscribed = false;
+        }
+
         private string GetPlayerInfos(string lookupName)
         {
             var playerList = new StringBuilder();
