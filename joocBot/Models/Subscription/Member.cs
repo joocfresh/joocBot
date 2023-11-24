@@ -13,8 +13,8 @@ namespace joocBot.Models
         public string PlayerName { get; set; } = string.Empty;
         public string GuildName { get; set; } = string.Empty;
         public string DiscordName { get; set; } = string.Empty;
-        public int LastKillEvent { get; set; } = default;
-        public int LastDeathEvent { get; set; } = default;
+        public long LastKillEvent { get; set; } = default;
+        public long LastDeathEvent { get; set; } = default;
 
         public void Update(Member member)
         {

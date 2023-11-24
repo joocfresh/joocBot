@@ -21,6 +21,7 @@ namespace joocBot.Albion
         private readonly AlbionApiRequestor _requestor;
         private const string DIRECTORY = "./Project/";
         private const string FILE = "AlbionQueryManager.env";
+
         private static int LoadRegion()
         {
             string path = Path.Combine(DIRECTORY, FILE);
@@ -73,7 +74,6 @@ namespace joocBot.Albion
                 return 0;
             }
         }
-
         private static int SaveRegion(int code) 
         {
             string path = Path.Combine(DIRECTORY, FILE);
@@ -107,26 +107,8 @@ namespace joocBot.Albion
 
         public string GetRegion() 
         { 
-            return _requestor.Region.ToString();
+            return $"알비온 서버: {_requestor.Region.ToString()} (디폴트:동부)";
         }
-        //public string SetRegion(string embeddedCode)
-        //{
-        //    switch (embeddedCode)
-        //    {
-        //        case "W":
-        //        case "w":
-        //            _requestor.Region = (RegionCode)SaveRegion((int)RegionCode.Western);
-        //            break;
-        //        case "E":
-        //        case "e":
-        //            _requestor.Region = (RegionCode)SaveRegion((int)RegionCode.Eastern);
-        //            break;
-        //        default:
-        //            _requestor.Region = (RegionCode)SaveRegion((int)RegionCode.Default);
-        //            break;
-        //    }
-        //    return _requestor.Region.ToString();
-        //}
         public string SetRegion(string embeddedCode)
         {
             _requestor.Region = embeddedCode switch
@@ -135,8 +117,9 @@ namespace joocBot.Albion
                 "E" or "e" => (RegionCode)SaveRegion((int)RegionCode.Eastern),
                 _ => (RegionCode)SaveRegion((int)RegionCode.Default),
             };
-            return _requestor.Region.ToString();
+            return $"알비온 서버: {_requestor.Region.ToString()} (방금설정됨)";
         }
+
         #pragma warning disable CS8604 // 가능한 null 참조 인수입니다.
         public List<Player> SearchPlayers(string username)
         {
@@ -168,18 +151,27 @@ namespace joocBot.Albion
                 : jsonObject.players.Select(p => p.Id).ToList()[0];
             return results;
         }
-
-        public List<BattleEvent> SearchPlayersEvents(string username)
+        public string ConvertNameToGuildOne(string username)
         {
-            var id = ConvertNameToIdOne(username);
-            string param;
-            if (string.IsNullOrEmpty(id))
-                param = username;
-            else
-                param = id;
+            var jsonString = _requestor.SearchUsername(username);
+            var jsonObject = JsonConvert.DeserializeObject<Search>(jsonString);
 
-            var killJson = _requestor.Kills(param);
-            var deathJson = _requestor.Deaths(param);
+            var Alliance = (jsonObject == null)
+                ? string.Empty
+                : jsonObject.players.Select(p => p.AllianceName).ToList()[0];
+            var guild = (jsonObject == null)
+                ? string.Empty
+                : jsonObject.players.Select(p => p.GuildName).ToList()[0];
+            return string.IsNullOrWhiteSpace(Alliance)? guild: $"[{Alliance}]{guild}";
+        }
+
+        public List<BattleEvent> SearchPlayersEvents(string username, string? id = default)
+        {
+            if (string.IsNullOrEmpty(id))
+                id = ConvertNameToIdOne(username);
+
+            var killJson = _requestor.Kills(id);
+            var deathJson = _requestor.Deaths(id);
             var kills = JsonConvert.DeserializeObject<List<BattleEvent>>(killJson) ?? new List<BattleEvent>();
             var deaths = JsonConvert.DeserializeObject<List<BattleEvent>>(deathJson) ?? new List<BattleEvent>();
 
@@ -194,9 +186,21 @@ namespace joocBot.Albion
             var results = jsonObject.OrderByDescending(be=>be.BattleId).ToList();
             return results;
         }
-        public BattleEvent SearchPlayersRecentEvent(string username)
+        public BattleEvent SearchPlayersRecentEvent(string username, string? id = default)
         {
-            return SearchPlayersEvents(username).First();
+            try
+            {
+                var result = (SearchPlayersEvents(username, id).Count > 0) ? SearchPlayersEvents(username, id).First() : new BattleEvent();
+                return result;
+            }
+            catch (Exception ex) 
+            {
+                Console.WriteLine(ex);
+                return new BattleEvent();
+            }
+            finally 
+            { 
+            }
         }
         public List<BattleEvent> SearchPlayersKills(string username)
         {
