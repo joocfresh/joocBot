@@ -5,6 +5,7 @@ using joocBot.Albion;
 using joocBot.Models;
 using joocBot.Repositories;
 using System;
+using System.Linq;
 using System.Text;
 using System.Threading.Channels;
 using System.Threading.Tasks;
@@ -46,6 +47,18 @@ namespace DiscordBot
             });
             _chatBot = new ChatBotRepository();                             //봇의 토큰 가져오기
             var token = _chatBot.GetToken().Token;
+
+            //프로그램 구동시 채널별 구독상태초기화
+            var channelRepository = new SubscribedChannelRepository();
+            var subscribedChannelList = channelRepository.GetAll()?.ToList();
+            if (subscribedChannelList != null && subscribedChannelList.Count != 0)
+            {
+                foreach (var item in subscribedChannelList)
+                {
+                    item.IsSubscribed = false;
+                    channelRepository.SaveOne(item);
+                }
+            }
 
             _lbionQueryManager = new AlbionQueryManager();                  //알비온 쿼리매니저 생성
 
@@ -130,29 +143,140 @@ namespace DiscordBot
                     _isSubEmbedShow = (inventoryCount > 0)? true:false; _isMessageShow = true; _isEmbedShow = true;
                     break;
                 case "subscribe":case "구독":
-                    var isRegistered = _SubscribedChannelList.Exists(channel => channel.Id == channelid);
+                    var channelRepository = new SubscribedChannelRepository();
+                    var subscribedChannelList = channelRepository.GetAll()?.ToList();
+                    //채널이 등록안되어 있으면 등록대기
+                    var isRegistered = subscribedChannelList.Exists(channel => channel.Id == channelid);
                     if (!isRegistered)
-                        _SubscribedChannelList.Add(new SubscribedChannel 
+                        subscribedChannelList.Add(new SubscribedChannel 
                         { 
                             Id = channelid,
-                            IsAuthorized = false,
-                            IsSubscribed = false,
-                            Name = context.Channel.Name,
+                            IsAuthorized = false, //허가 떨어지면 구독가능
+                            IsSubscribed = false, //구독에 대한 트리거
+                            Name = $"[{context.Guild.Name}]{context.Channel.Name}",
                             Description = string.Empty,
                         });
-
-                    _ = ExecuteSubscription(channelid, context);
-                    returnMessage = $"[{context.Guild.Name}]#{context.Channel.Name}:{channelid}에서 이벤트 구독을 시작합니다.";
+                    var thisChannel = subscribedChannelList.FirstOrDefault(channel => channel.Id == channelid);
+                    thisChannel = (thisChannel==null) ? new SubscribedChannel() : thisChannel;
+                    if (thisChannel != null)
+                    {
+                        if (thisChannel.IsAuthorized)
+                        {
+                            if (!thisChannel.IsSubscribed)
+                            {
+                                thisChannel.IsSubscribed = true;
+                                _ = channelRepository.SaveALL(subscribedChannelList);
+                                _ = ExecuteSubscription(channelid, context);
+                                returnMessage = $"[{context.Guild.Name}]#{context.Channel.Name}:{channelid}에서 이벤트 구독을 시작합니다.";
+                            }
+                            else
+                            {
+                                returnMessage = $"이미 구독중 입니다.";
+                            }
+                        }
+                        else
+                        {
+                            returnMessage = $"[{context.Guild.Name}]#{context.Channel.Name}:{channelid} 등록 대기중이거나 허가되지 않은 채널입니다. 관리자에게 문의하세요.";
+                            _ = channelRepository.SaveALL(subscribedChannelList);
+                        }
+                    }
+                    else
+                    {
+                        returnMessage = $"[{context.Guild.Name}]#{context.Channel.Name}:{channelid} 채널이 등록되지 않았습니다.";
+                        _ = channelRepository.SaveALL(subscribedChannelList);
+                    }
                     _isMessageShow = true;
+                    
                     break;
-                case "unsubscribe": case "구독중지":
-                    _ = TerminateSubscription(channelid, context);
+                case "unsubscribe": case "구독중지": case "구독취소":
+                    TerminateSubscription(channelid, context);
                     returnMessage = $"[{context.Guild.Name}]#{context.Channel.Name}:{channelid}에서 이벤트 구독을 중지합니다.";
                     _isMessageShow = true;
+                    break;
+                case "clear": case "disband": case "청소": case "디스밴드":
+                    var bandRepository = new MemberRepository();
+                    var items = bandRepository.GetAll()?.ToList().Where(member => member.DiscordName == context.Channel.Id.ToString()).ToList();
+                    foreach (var item in items)
+                    {
+                        bandRepository.DeleteOne(item);
+                    }
+                    returnMessage = $"이 채널의 모든 등록을 취소합니다.";
+                    _isMessageShow = true;
+                    break;
+                case "d": case "delete":case "제명": case"제거":
+                    if (string.IsNullOrEmpty(param))
+                    {
+                        returnMessage = $"플레이어명을 입력하세요.";
+                    }
+                    else
+                    {
+                        var memberRepository = new MemberRepository();
+                        var members = memberRepository.GetAll()?.ToList().Where(member => member.DiscordName == context.Channel.Id.ToString()).ToList();
+                        var member = members?.FirstOrDefault(one =>one.PlayerName == param);
+                        memberRepository.DeleteOne(member);
+                      
+                        returnMessage = $" **{param}**이 제명 되었습니다.\n\n";
+
+                        members = memberRepository.GetAll()?.ToList().Where(member => member.DiscordName == context.Channel.Id.ToString()).ToList();
+                        var memberList = new StringBuilder();
+                        memberList.AppendLine("```");
+                        foreach (var item in members)
+                            memberList.AppendLine($"- {item.PlayerId} | {item.PlayerName}");
+                        memberList.AppendLine("```");
+
+                        await context.Channel.SendMessageAsync($"구독자 리스트\n{memberList}");
+                    }
+                    
+                    _isMessageShow = true;
+                    break;
+                case "r": case "register": case "등록":
+                    if (string.IsNullOrEmpty(param))
+                    {
+                        var memberRepository = new MemberRepository();
+                        var members = memberRepository.GetAll()?.ToList().Where(member => member.DiscordName == context.Channel.Id.ToString()).ToList();
+                        var memberList = new StringBuilder();
+                        memberList.AppendLine("```");
+                        foreach (var member in members)
+                            memberList.AppendLine($"- {member.PlayerId} | {member.PlayerName}");
+                        memberList.AppendLine("```");
+
+                        await context.Channel.SendMessageAsync($"구독자 리스트\n{memberList}");
+                    }
+                    else
+                    {
+                        var memberRepository = new MemberRepository();
+                        id = _lbionQueryManager.ConvertNameToIdOne(param);
+                        var guildName = _lbionQueryManager.ConvertNameToGuildOne(param);
+                        memberRepository.SaveOne(new Member()
+                        {
+                            Id = Guid.NewGuid().ToString(),
+                            PlayerId = id,
+                            PlayerName = param,
+                            GuildName = guildName,
+                            DiscordName = context.Channel.Id.ToString()
+                        });
+
+                        var members = memberRepository.GetAll()?.Select(member =>
+                        {
+                            member.DiscordName = context.Channel.Id.ToString();
+                            return member;
+                        }).ToList();
+                        var memberList = new StringBuilder();
+                        memberList.AppendLine("```");
+                        foreach (var member in members)
+                            memberList.AppendLine($"- {member.PlayerId} | {member.PlayerName}");
+                        memberList.AppendLine("```");
+
+                        await context.Channel.SendMessageAsync($"구독자 리스트\n{memberList}");
+                    }
                     break;
                 case "server":case "서버":
                     returnMessage = string.IsNullOrWhiteSpace(param)?_lbionQueryManager.GetRegion(): _lbionQueryManager.SetRegion(param);
                     _isMessageShow = true; _isEmbedShow = false;
+                    break;
+                case "channel": case "채널":
+                    returnMessage = $"현재 채널은 [{context.Guild.Name}]#{context.Channel.Name}({channelid}) 입니다.";
+                    _isMessageShow = true;
                     break;
                 case "search":case "검색":
                     returnMessage = GetPlayerInfos(param);
@@ -174,28 +298,59 @@ namespace DiscordBot
         }
         private async Task ExecuteSubscription(ulong key, SocketCommandContext context)
         {
-            var subscriptionInfo = _SubscribedChannelList.FirstOrDefault(item => item.Id == key);
+            var subscriptionInfo = new SubscribedChannelRepository().GetAll()?.FirstOrDefault(item => item.Id == key);
             if (subscriptionInfo == null)
                 return;
             await Task.Run(async () =>
             {
                 while (subscriptionInfo.IsSubscribed == true)
                 {
-                    await context.Channel.SendMessageAsync($"구독중... {subscriptionInfo.Name}");
+                    var memberRepository = new MemberRepository();
+                    var members = memberRepository.GetAll()?.ToList().Where(member => member.DiscordName == context.Channel.Id.ToString()).ToList();
+                    var memberList = new StringBuilder();
+                    
+                    foreach (var member in members)
+                    {
+                        var killEvent = _lbionQueryManager.SearchPlayersRecentEvent(member.PlayerName,member.PlayerId);
+                        if (killEvent.BattleId == member.LastKillEvent || killEvent.BattleId == 0)
+                            continue;
+                        else
+                            member.LastKillEvent = killEvent.BattleId;
+                        var inventoryCount = killEvent.Victim.Inventory?.Count(item => item != null);
+
+                        var embed = GetEventMessage(killEvent, member.PlayerId);
+                        EmbedBuilder? subEmbed = (inventoryCount > 0) ? GetSubEventMessage(killEvent, member.PlayerId) : null;
+
+                        await context.Channel.SendMessageAsync(embed: embed.Build());
+                        if (subEmbed != null)
+                        {
+                            Thread.Sleep(50);
+                            await context.Channel.SendMessageAsync(embed: subEmbed.Build());
+                        }
+                        Thread.Sleep(1000);
+                    }
+
+                    //await context.Channel.SendMessageAsync($"구독중... {subscriptionInfo.Name}\n{memberList}");
+                    memberRepository.SaveALL(members);
+                    subscriptionInfo = new SubscribedChannelRepository().GetAll()?.FirstOrDefault(item => item.Id == key);
                     Thread.Sleep(5000);
                 }
                 //await context.Channel.SendMessageAsync($"구독중지. {subscriptionInfo.Name}");
             });
         }
-        private async Task TerminateSubscription(ulong key, SocketCommandContext context)
+        private void TerminateSubscription(ulong key, SocketCommandContext context)
         {
-            var subscriptionInfo = _SubscribedChannelList.FirstOrDefault(item => item.Id == key);
+            var channelRepository = new SubscribedChannelRepository();
+            var subscriptionInfo = channelRepository.GetAll()?.FirstOrDefault(item => item.Id == key);
             if (subscriptionInfo == null)
                 return;
-            await context.Channel.SendMessageAsync($"구독을 정지합니다. {subscriptionInfo.Name}");
             subscriptionInfo.IsSubscribed = false;
+            channelRepository.SaveOne(subscriptionInfo);
         }
+        private void RegisterChannel()
+        {
 
+        }
         private string GetPlayerInfos(string lookupName)
         {
             var playerList = new StringBuilder();
@@ -212,7 +367,7 @@ namespace DiscordBot
         }
         private string GetHelpMessage()
         {
-            return "도움말 불러오기"; ////var inventory = GetInventoryItems(battleEvent.Victim.Inventory);
+            return "도움말 불러오기 \n"+ File.ReadAllText(@"project/Help.md");
         }
         private EmbedBuilder GetSubEventMessage(BattleEvent battleEvent, string id)
         {
@@ -275,17 +430,20 @@ namespace DiscordBot
 
             string url = $"https://albiononline.com/killboard/kill/{battleEvent.EventId}?server={server}";
 
+            var kGuildName = string.IsNullOrEmpty(battleEvent.Killer.GuildName) ? string.Empty : $"[{battleEvent.Killer.GuildName}]";
+            var vGuildName = string.IsNullOrEmpty(battleEvent.Victim.GuildName) ? string.Empty : $"[{battleEvent.Killer.GuildName}]";
+
             if (battleEvent.Killer.Id == id)
             {
                 color = Color.Green;
-                title = $"[{battleEvent.Killer.GuildName}] {battleEvent.Killer.Name}님이 [{battleEvent.Victim.GuildName}] {battleEvent.Victim.Name}를 죽임.";
+                title = $"{kGuildName}{battleEvent.Killer.Name}님이 {vGuildName}{battleEvent.Victim.Name}를 죽임.";
                 description = "\n사망! 머더퍼커!\n";
             }
             else
             {
                 description = "\n이런날도있는거죠...\n";
                 color = Color.Red;
-                title = $"[{battleEvent.Victim.GuildName}] {battleEvent.Victim.Name}님이 [{battleEvent.Killer.GuildName}] {battleEvent.Killer.Name}한테 당함.";
+                title = $"{kGuildName}{battleEvent.Victim.Name}님이 {vGuildName}{battleEvent.Killer.Name}한테 당함.";
             }
 
             var embed = new EmbedBuilder
@@ -306,7 +464,6 @@ namespace DiscordBot
 
             return embed;
         }
-
         private string GetGearImageUrl(string? name,int count, int quality)
         {
             return $"https://render.albiononline.com/v1/item/{name}.png?count={count}&quality={quality}";
@@ -321,17 +478,34 @@ namespace DiscordBot
             {
                 return string.IsNullOrEmpty(name)?"없음":name;
             };
+            Func<string, string> NvlAlliance = delegate (string name)
+            {
+                return string.IsNullOrEmpty(name) ? string.Empty : $"[{name}]";
+            };
 
-            var killerAllianceName = Nvl(battleEvent.Killer.AllianceName);
+            var killerAllianceName = NvlAlliance(battleEvent.Killer.AllianceName);
             var killerGuildName = Nvl(battleEvent.Killer.GuildName);
-            var victimAllianceName = Nvl(battleEvent.Victim.AllianceName);
+            var victimAllianceName = NvlAlliance(battleEvent.Victim.AllianceName);
             var victimGuildName = Nvl(battleEvent.Victim.GuildName);
 
-            var killer = $"{Environment.NewLine}길드: [{killerAllianceName}]{killerGuildName}{Environment.NewLine}유저: **{battleEvent.Killer.Name}**  :crossed_swords: {Environment.NewLine}IP: {battleEvent.Killer.AverageItemPower}{Environment.NewLine}";
-            var victim = $"{Environment.NewLine}길드: [{victimAllianceName}]{victimGuildName}{Environment.NewLine}유저: **{battleEvent.Victim.Name}**  :cry: {Environment.NewLine}IP: {battleEvent.Victim.AverageItemPower}{Environment.NewLine}";
-            //var inventoryCount = $"{Environment.NewLine}센터까서 나온 아이템 목록: {Environment.NewLine}";
+            var killer = $"{Environment.NewLine}길드: {killerAllianceName}{killerGuildName}{Environment.NewLine}유저: **{battleEvent.Killer.Name}**     :crossed_swords: 포함 {battleEvent.numberOfParticipants}명 {Environment.NewLine}IP: {battleEvent.Killer.AverageItemPower}{Environment.NewLine}";
+            var victim = $"{Environment.NewLine}길드: {victimAllianceName}{victimGuildName}{Environment.NewLine}유저: **{battleEvent.Victim.Name}**     :skull_crossbones: {Environment.NewLine}IP: {battleEvent.Victim.AverageItemPower}{Environment.NewLine}";
+            string contributers = string.Empty;
+            var contributer = new StringBuilder("\n **같이 때린사람:**");
 
-            var result = killer + killersGear.ToString() + victim + victimsGear.ToString();// + inventoryCount + inventory.ToString();
+
+            var participants = battleEvent.Participants?.Where(member=>member.Name != battleEvent.Killer.Name).ToList();
+            if (participants!=null&& participants.Any()) 
+            {
+                foreach (var participant in participants) 
+                {
+                    contributer.Append($" {participant.Name},");
+                }
+                contributer.AppendLine();
+                contributers = contributer.ToString();
+            }
+
+            var result = killer + killersGear.ToString() + victim + victimsGear.ToString() + contributers;
             return result;
         }
         private StringBuilder GetInventoryItems(Gear[]? inventory)
@@ -371,10 +545,10 @@ namespace DiscordBot
                 gearQuality = equipment.MainHand.Quality;
                 gearName = equipment.MainHand.Type;
                 gearURL = GetGearImageUrl(gearName, gearCount, gearQuality); 
-                gears.AppendLine($"MainHand: [{gearName}]({ gearURL})");
+                gears.AppendLine($"MainHand : [{gearName}]({ gearURL})");
             }
             else
-                gears.AppendLine($"MainHand: [없음]");
+                gears.AppendLine($"MainHand : [없음]");
 
             if (equipment.OffHand != null)
             {
@@ -382,10 +556,10 @@ namespace DiscordBot
                 gearQuality = equipment.OffHand.Quality;
                 gearName = equipment.OffHand.Type;
                 gearURL = GetGearImageUrl(gearName, gearCount, gearQuality); 
-                gears.AppendLine($"OffHand: [{gearName}]({ gearURL})");
+                gears.AppendLine($"OffHand  : [{gearName}]({ gearURL})");
             }
             else
-                gears.AppendLine($"OffHand: [없음]");
+                gears.AppendLine($"OffHand  : [없음]");
 
             if (equipment.Head != null)
             {
@@ -393,10 +567,10 @@ namespace DiscordBot
                 gearQuality = equipment.Head.Quality;
                 gearName = equipment.Head.Type;
                 gearURL = GetGearImageUrl(gearName, gearCount, gearQuality); 
-                gears.AppendLine($"Head: [{gearName}]({ gearURL})");
+                gears.AppendLine($"Head : [{gearName}]({ gearURL})");
             }
             else
-                gears.AppendLine($"Head: [없음]");
+                gears.AppendLine($"Head : [없음]");
 
             if (equipment.Armor != null) 
             {
@@ -404,10 +578,10 @@ namespace DiscordBot
                 gearQuality = equipment.Armor.Quality;
                 gearName = equipment.Armor.Type;
                 gearURL = GetGearImageUrl(gearName, gearCount, gearQuality); 
-                gears.AppendLine($"Armor: [{gearName}]({ gearURL})");
+                gears.AppendLine($"Armor    : [{gearName}]({ gearURL})");
             }
             else
-                gears.AppendLine($"Armor: [없음]");
+                gears.AppendLine($"Armor    : [없음]");
 
             if (equipment.Shoes != null)
             {
@@ -415,10 +589,10 @@ namespace DiscordBot
                 gearQuality = equipment.Shoes.Quality;
                 gearName = equipment.Shoes.Type;
                 gearURL = GetGearImageUrl(gearName, gearCount, gearQuality); 
-                gears.AppendLine($"Shoes: [{gearName}]({ gearURL})");
+                gears.AppendLine($"Shoes    : [{gearName}]({ gearURL})");
             }
             else
-                gears.AppendLine($"Shoes: [없음]");
+                gears.AppendLine($"Shoes    : [없음]");
 
             if (equipment.Cape != null)
             {
@@ -426,10 +600,10 @@ namespace DiscordBot
                 gearQuality = equipment.Cape.Quality;
                 gearName = equipment.Cape.Type;
                 gearURL = GetGearImageUrl(gearName, gearCount, gearQuality); 
-                gears.AppendLine($"Cape: [{gearName}]({ gearURL})");
+                gears.AppendLine($"Cape : [{gearName}]({ gearURL})");
             }
             else
-                gears.AppendLine($"Cape: [없음]");
+                gears.AppendLine($"Cape : [없음]");
 
             if (equipment.Potion != null)
             {
@@ -437,40 +611,40 @@ namespace DiscordBot
                 gearQuality = equipment.Potion.Quality;
                 gearName = equipment.Potion.Type;
                 gearURL = GetGearImageUrl(gearName, gearCount, gearQuality); 
-                gears.AppendLine($"Potion: [{gearName}]({ gearURL})");
+                gears.AppendLine($"Potion   : [{gearName}]({ gearURL})");
             }
             else
-                gears.AppendLine($"Potion: [없음]");
+                gears.AppendLine($"Potion   : [없음]");
             if (equipment.Food != null)
             {
                 gearCount = equipment.Food.Count;
                 gearQuality = equipment.Food.Quality;
                 gearName = equipment.Food.Type;
                 gearURL = GetGearImageUrl(gearName, gearCount, gearQuality); 
-                gears.AppendLine($"Food: [{gearName}]({ gearURL})");
+                gears.AppendLine($"Food : [{gearName}]({ gearURL})");
             }
             else
-                gears.AppendLine($"Food: [없음]");
+                gears.AppendLine($"Food : [없음]");
             if (equipment.Mount != null)
             {
                 gearCount = equipment.Mount.Count;
                 gearQuality = equipment.Mount.Quality;
                 gearName = equipment.Mount.Type;
                 gearURL = GetGearImageUrl(gearName, gearCount, gearQuality); 
-                gears.AppendLine($"Mount: [{gearName}]({ gearURL})");
+                gears.AppendLine($"Mount    : [{gearName}]({ gearURL})");
             }
             else
-                gears.AppendLine($"Mount: [없음]");
+                gears.AppendLine($"Mount    : [없음]");
             if (equipment.Bag != null)
             {
                 gearCount = equipment.Bag.Count;
                 gearQuality = equipment.Bag.Quality;
                 gearName = equipment.Bag.Type;
                 gearURL = GetGearImageUrl(gearName, gearCount, gearQuality); 
-                gears.AppendLine($"Bag: [{gearName}]({ gearURL})");
+                gears.AppendLine($"Bag  : [{gearName}]({ gearURL})");
             }
             else
-                gears.AppendLine($"Bag: [없음]");
+                gears.AppendLine($"Bag  : [없음]");
             return gears;
         }
 

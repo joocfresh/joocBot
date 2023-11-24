@@ -5,16 +5,17 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
+using System.Xml.Linq;
 
 namespace joocBot.Repositories
 {
-    public class MemberRepository : IRepository<Member>
+    public class SubscribedChannelRepository
     {
         private static Mutex mutex = new Mutex();
         private const string DIRECTORY = "./Project/";
-        private const string FILE = "MemberRepository.json";
+        private const string FILE = "SubscribedChannelRepository.json";
 
-        private void SaveElements(IEnumerable<Member> elements)
+        private void SaveElements(IEnumerable<SubscribedChannel> elements)
         {
             try
             {
@@ -33,21 +34,21 @@ namespace joocBot.Repositories
                 mutex.ReleaseMutex();
             }
         }
-        private List<Member> LoadElements()
+        private List<SubscribedChannel> LoadElements()
         {
-            IEnumerable<Member>? elements = GetAll();
+            IEnumerable<SubscribedChannel>? elements = GetAll();
 
-            List<Member> list;
+            List<SubscribedChannel> list;
             if (elements == null)
-                list = new List<Member>();
+                list = new List<SubscribedChannel>();
             else
                 list = elements.ToList();
             return list;
         }
-        public bool DeleteOne(Member? element)
+        public bool DeleteOne(SubscribedChannel element)
         {
-            List<Member> elements = LoadElements();
-            Member? selectedElement = elements.Find(s => s.Id == element?.Id);
+            List<SubscribedChannel> elements = LoadElements();
+            SubscribedChannel? selectedElement = elements.Find(s => s.Id == element.Id);
             if (selectedElement == null)
                 return false;
             elements.Remove(selectedElement);
@@ -55,9 +56,9 @@ namespace joocBot.Repositories
             return true;
         }
 
-        public bool Exist(Member? element) => LoadElements().Exists(s => s.Id == element?.Id);
+        public bool Exist(SubscribedChannel element) => LoadElements().Exists(s => s.Id == element.Id);
 
-        public IEnumerable<Member>? GetAll()
+        public IEnumerable<SubscribedChannel>? GetAll()
         {
             try
             {
@@ -76,20 +77,20 @@ namespace joocBot.Repositories
                 }
                 var jsonObject = File.ReadAllText(path);
                 return string.IsNullOrWhiteSpace(jsonObject)
-                    ? new List<Member>() : JsonConvert.DeserializeObject<IEnumerable<Member>>(jsonObject);
+                    ? new List<SubscribedChannel>() : JsonConvert.DeserializeObject<IEnumerable<SubscribedChannel>>(jsonObject);
             }
             catch
             {
-                return new List<Member>();
+                return new List<SubscribedChannel>();
             }
         }
 
-        public bool SaveOne(Member element)
+        public bool SaveOne(SubscribedChannel element)
         {
             try
             {
-                List<Member> elements = LoadElements(); //new List<BsonDocument>(); //
-                Member? selectedElement = elements.Find(s => s.Id == element.Id);
+                List<SubscribedChannel> elements = LoadElements(); //new List<BsonDocument>(); //
+                SubscribedChannel? selectedElement = elements.Find(s => s.Id == element.Id);
                 if (selectedElement != null)
                 {
                     selectedElement.Update(element);
@@ -107,7 +108,7 @@ namespace joocBot.Repositories
                 return false;
             }
         }
-        public bool SaveALL(List<Member> elements)
+        public bool SaveALL(List<SubscribedChannel> elements)
         {
             try
             {

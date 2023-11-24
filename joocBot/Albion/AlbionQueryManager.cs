@@ -151,18 +151,27 @@ namespace joocBot.Albion
                 : jsonObject.players.Select(p => p.Id).ToList()[0];
             return results;
         }
-
-        public List<BattleEvent> SearchPlayersEvents(string username)
+        public string ConvertNameToGuildOne(string username)
         {
-            var id = ConvertNameToIdOne(username);
-            string param;
-            if (string.IsNullOrEmpty(id))
-                param = username;
-            else
-                param = id;
+            var jsonString = _requestor.SearchUsername(username);
+            var jsonObject = JsonConvert.DeserializeObject<Search>(jsonString);
 
-            var killJson = _requestor.Kills(param);
-            var deathJson = _requestor.Deaths(param);
+            var Alliance = (jsonObject == null)
+                ? string.Empty
+                : jsonObject.players.Select(p => p.AllianceName).ToList()[0];
+            var guild = (jsonObject == null)
+                ? string.Empty
+                : jsonObject.players.Select(p => p.GuildName).ToList()[0];
+            return string.IsNullOrWhiteSpace(Alliance)? guild: $"[{Alliance}]{guild}";
+        }
+
+        public List<BattleEvent> SearchPlayersEvents(string username, string? id = default)
+        {
+            if (string.IsNullOrEmpty(id))
+                id = ConvertNameToIdOne(username);
+
+            var killJson = _requestor.Kills(id);
+            var deathJson = _requestor.Deaths(id);
             var kills = JsonConvert.DeserializeObject<List<BattleEvent>>(killJson) ?? new List<BattleEvent>();
             var deaths = JsonConvert.DeserializeObject<List<BattleEvent>>(deathJson) ?? new List<BattleEvent>();
 
@@ -177,9 +186,21 @@ namespace joocBot.Albion
             var results = jsonObject.OrderByDescending(be=>be.BattleId).ToList();
             return results;
         }
-        public BattleEvent SearchPlayersRecentEvent(string username)
+        public BattleEvent SearchPlayersRecentEvent(string username, string? id = default)
         {
-            return SearchPlayersEvents(username).First();
+            try
+            {
+                var result = (SearchPlayersEvents(username, id).Count > 0) ? SearchPlayersEvents(username, id).First() : new BattleEvent();
+                return result;
+            }
+            catch (Exception ex) 
+            {
+                Console.WriteLine(ex);
+                return new BattleEvent();
+            }
+            finally 
+            { 
+            }
         }
         public List<BattleEvent> SearchPlayersKills(string username)
         {
