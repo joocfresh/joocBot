@@ -202,6 +202,26 @@ namespace joocBot.Albion
             { 
             }
         }
+        public Queue<BattleEvent> SearchPlayersEventQueue(string username, string? id = default)
+        {
+            try
+            {
+                var result = new Queue<BattleEvent>();
+                foreach( var element in SearchPlayersEvents(username, id).OrderBy(e => e.EventId))
+                {
+                    result.Enqueue(element);
+                }
+                return result;
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine(ex);
+                return new Queue<BattleEvent>();
+            }
+            finally
+            {
+            }
+        }
         public List<BattleEvent> SearchPlayersKills(string username)
         {
             var id = ConvertNameToIdOne(username);
