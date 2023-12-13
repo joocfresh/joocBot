@@ -6,6 +6,7 @@ using joocBot.Models;
 using joocBot.Repositories;
 using System;
 using System.Linq;
+using System.Reflection.Metadata.Ecma335;
 using System.Text;
 using System.Threading.Channels;
 using System.Threading.Tasks;
@@ -311,22 +312,33 @@ namespace DiscordBot
                     
                     foreach (var member in members)
                     {
-                        var killEvent = _lbionQueryManager.SearchPlayersRecentEvent(member.PlayerName,member.PlayerId);
-                        if (killEvent.BattleId == member.LastKillEvent || killEvent.BattleId == 0)
-                            continue;
-                        else
-                            member.LastKillEvent = killEvent.BattleId;
-                        var inventoryCount = killEvent.Victim.Inventory?.Count(item => item != null);
-
-                        var embed = GetEventMessage(killEvent, member.PlayerId);
-                        EmbedBuilder? subEmbed = (inventoryCount > 0) ? GetSubEventMessage(killEvent, member.PlayerId) : null;
-
-                        await context.Channel.SendMessageAsync(embed: embed.Build());
-                        if (subEmbed != null)
+                        var killEvents = _lbionQueryManager.SearchPlayersEventQueue(member.PlayerName, member.PlayerId);
+                        foreach (var element in killEvents)
                         {
-                            Thread.Sleep(50);
-                            await context.Channel.SendMessageAsync(embed: subEmbed.Build());
+                            if (element.BattleId <= member.LastKillEvent || element.BattleId == 0)
+                                continue;
+                            else
+                                member.LastKillEvent = element.BattleId;
+                            var inventoryCount = element.Victim.Inventory?.Count(item => item != null);
+
+                            var embed = GetEventMessage(element, member.PlayerId);
+                            EmbedBuilder? subEmbed = (inventoryCount > 0) ? GetSubEventMessage(element, member.PlayerId) : new EmbedBuilder();
+
+                            await context.Channel.SendMessageAsync(embed: embed.Build());
+                            if (inventoryCount > 0)
+                            {
+                                Thread.Sleep(50);
+                                await context.Channel.SendMessageAsync(embed: subEmbed.Build());
+                            }
+                            Thread.Sleep(1000);
                         }
+
+                        //var killEvent = _lbionQueryManager.SearchPlayersRecentEvent(member.PlayerName,member.PlayerId);
+                        //if (killEvent.BattleId == member.LastKillEvent || killEvent.BattleId == 0)
+                        //    continue;
+                        //else
+                        //    member.LastKillEvent = killEvent.BattleId;
+                        
                         Thread.Sleep(1000);
                     }
 
@@ -419,7 +431,7 @@ namespace DiscordBot
             Color color;
             string footerText = "Powered by GooglyMoogly";
             string server;
-            string fieldTitle = $"킬명성: {battleEvent.TotalVictimKillFame.ToString()}";
+            string fieldTitle = $"￡킬명성: {battleEvent.TotalVictimKillFame.ToString()}";
             string fieldContext = GetFiledContext(battleEvent);
             string description;
 
@@ -431,19 +443,19 @@ namespace DiscordBot
             string url = $"https://albiononline.com/killboard/kill/{battleEvent.EventId}?server={server}";
 
             var kGuildName = string.IsNullOrEmpty(battleEvent.Killer.GuildName) ? string.Empty : $"[{battleEvent.Killer.GuildName}]";
-            var vGuildName = string.IsNullOrEmpty(battleEvent.Victim.GuildName) ? string.Empty : $"[{battleEvent.Killer.GuildName}]";
+            var vGuildName = string.IsNullOrEmpty(battleEvent.Victim.GuildName) ? string.Empty : $"[{battleEvent.Victim.GuildName}]";
 
             if (battleEvent.Killer.Id == id)
             {
                 color = Color.Green;
                 title = $"{kGuildName}{battleEvent.Killer.Name}님이 {vGuildName}{battleEvent.Victim.Name}를 죽임.";
-                description = "\n사망! 머더퍼커!\n";
+                description = "\n\n사망! 머더퍼커!\n";
             }
             else
             {
-                description = "\n이런날도있는거죠...\n";
+                description = "\n\n이런날도있는거죠 뭐...\n";
                 color = Color.Red;
-                title = $"{kGuildName}{battleEvent.Victim.Name}님이 {vGuildName}{battleEvent.Killer.Name}한테 당함.";
+                title = $"{vGuildName}{battleEvent.Victim.Name}님이 {kGuildName}{battleEvent.Killer.Name}한테 당함.";
             }
 
             var embed = new EmbedBuilder
@@ -488,10 +500,14 @@ namespace DiscordBot
             var victimAllianceName = NvlAlliance(battleEvent.Victim.AllianceName);
             var victimGuildName = Nvl(battleEvent.Victim.GuildName);
 
-            var killer = $"{Environment.NewLine}길드: {killerAllianceName}{killerGuildName}{Environment.NewLine}유저: **{battleEvent.Killer.Name}**     :crossed_swords: 포함 {battleEvent.numberOfParticipants}명 {Environment.NewLine}IP: {battleEvent.Killer.AverageItemPower}{Environment.NewLine}";
-            var victim = $"{Environment.NewLine}길드: {victimAllianceName}{victimGuildName}{Environment.NewLine}유저: **{battleEvent.Victim.Name}**     :skull_crossbones: {Environment.NewLine}IP: {battleEvent.Victim.AverageItemPower}{Environment.NewLine}";
+            var participantQty = (battleEvent.numberOfParticipants - 1 == 0) ? "Solo kill" : $"외 {battleEvent.numberOfParticipants - 1}명";
+
+            var killer = $"{Environment.NewLine}길드: {killerAllianceName}{killerGuildName}{Environment.NewLine}유저: **{battleEvent.Killer.Name}**     :crossed_swords: {participantQty} {Environment.NewLine}IP: {(int)battleEvent.Killer.AverageItemPower}{Environment.NewLine}";
+            var victim = $"{Environment.NewLine}길드: {victimAllianceName}{victimGuildName}{Environment.NewLine}유저: **{battleEvent.Victim.Name}**     :skull_crossbones: {Environment.NewLine}IP: {(int)battleEvent.Victim.AverageItemPower}{Environment.NewLine}";
             string contributers = string.Empty;
-            var contributer = new StringBuilder("\n **같이 때린사람:**");
+
+            var datetime = $"발생일시: { battleEvent.TimeStamp.ToString()} \n발생장소:{battleEvent.KillArea.ToString()}";
+            var contributer = new StringBuilder("\n 어시스트:");
 
 
             var participants = battleEvent.Participants?.Where(member=>member.Name != battleEvent.Killer.Name).ToList();
@@ -499,13 +515,26 @@ namespace DiscordBot
             {
                 foreach (var participant in participants) 
                 {
-                    contributer.Append($" {participant.Name},");
+                    contributer.Append($" {participant.Name}(ip:{(int)participant.AverageItemPower}), ");
                 }
                 contributer.AppendLine();
                 contributers = contributer.ToString();
             }
+            var partyMember = new StringBuilder("\n 파티멤버:");
 
-            var result = killer + killersGear.ToString() + victim + victimsGear.ToString() + contributers;
+
+            var groupMembers = battleEvent.GroupMembers?.Where(member => member.Name != battleEvent.Killer.Name).ToList();
+            if (groupMembers != null && groupMembers.Any())
+            {
+                foreach (var groupMember in groupMembers)
+                {
+                    partyMember.Append($" {groupMember.Name}, ");
+                }
+                partyMember.AppendLine();
+                contributers = contributers + partyMember.ToString();
+            }
+
+            var result = killer + killersGear.ToString() + victim + victimsGear.ToString() + contributers + datetime;
             return result;
         }
         private StringBuilder GetInventoryItems(Gear[]? inventory)
@@ -523,8 +552,11 @@ namespace DiscordBot
                     gearCount = gear.Value.Count;
                     gearQuality = gear.Value.Quality;
                     gearName = gear.Value.Type;
-                    gearURL = GetGearImageUrl(gearName, gearCount, gearQuality);
-                    gears.AppendLine($"[{gear.Index}]번째 칸: [{gearName}]({gearURL}) 품질:{gearQuality} 수량:{gearCount}");
+                    if (gear.Index > 25)
+                        gearURL = string.Empty;
+                    else
+                        gearURL = GetGearImageUrl(gearName, gearCount, gearQuality);
+                    gears.AppendLine($"[{gear.Index}]번째 칸: [{gearName}]({gearURL}) 수량:{gearCount}");
                 }
             }
             gears.AppendLine($"-----이하 비었음-----");
