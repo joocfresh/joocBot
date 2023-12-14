@@ -135,6 +135,10 @@ namespace DiscordBot
                     returnMessage = GetHelpMessage();
                     _isMessageShow = true;
                     break;
+                case "p":case "patch":case "패치": case"패치노트":
+                    returnMessage = GetHelpPatchNote();
+                    _isMessageShow = true;
+                    break;
                 case "k":case "killlog": case "킬": case "킬로그":
                     var id = _lbionQueryManager.ConvertNameToIdOne(param);
                     var killEvent = _lbionQueryManager.SearchPlayersRecentEvent(param);
@@ -381,6 +385,10 @@ namespace DiscordBot
         {
             return "도움말 불러오기 \n"+ File.ReadAllText(@"project/Help.md");
         }
+        private string GetHelpPatchNote()
+        {
+            return "패치노트: \n" + File.ReadAllText(@"project/PatchNote.md");
+        }
         private EmbedBuilder GetSubEventMessage(BattleEvent battleEvent, string id)
         {
             string title;
@@ -506,7 +514,7 @@ namespace DiscordBot
             var victim = $"{Environment.NewLine}길드: {victimAllianceName}{victimGuildName}{Environment.NewLine}유저: **{battleEvent.Victim.Name}**     :skull_crossbones: {Environment.NewLine}IP: {(int)battleEvent.Victim.AverageItemPower}{Environment.NewLine}";
             string contributers = string.Empty;
 
-            var datetime = $"발생일시: { battleEvent.TimeStamp.ToString()} \n발생장소:{battleEvent.KillArea.ToString()}";
+            var datetime = $"발생일시: { battleEvent.TimeStamp.ToString()}(UTC) \n발생장소:{battleEvent.KillArea.ToString()}";
             var contributer = new StringBuilder("\n 어시스트:");
 
 
