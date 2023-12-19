@@ -4,6 +4,7 @@ using Discord.WebSocket;
 using joocBot.Albion;
 using joocBot.Models;
 using joocBot.Repositories;
+using Markdig;
 using System;
 using System.Linq;
 using System.Reflection.Metadata.Ecma335;
@@ -383,11 +384,36 @@ namespace DiscordBot
         }
         private string GetHelpMessage()
         {
-            return "도움말 불러오기 \n"+ File.ReadAllText(@"project/Help.md");
+            using (HttpClient client = new HttpClient())
+            {
+                try
+                {
+                    return Environment.NewLine + "[구글리의 깃허브에서 사용법 보기](https://github.com/joocfresh/joocBot/blob/joocfresh-patch-1/Help.md) 링크를 클릭하고 구글리의 깃허브로 놀러와서 별주세요.";
+                        //client.GetStringAsync("https://raw.githubusercontent.com/joocfresh/joocBot/main/Help.md").Result;
+                }
+                catch (Exception ex)
+                {
+                    Console.WriteLine($"Error: {ex.Message}");
+                    return ex.Message;
+                }
+            }
+            //return "도움말 불러오기 \n"+ File.ReadAllText(@"project/Help.md");
         }
         private string GetHelpPatchNote()
         {
-            return "패치노트: \n" + File.ReadAllText(@"project/PatchNote.md");
+            using (HttpClient client = new HttpClient())
+            {
+                try
+                {
+                    return Environment.NewLine + client.GetStringAsync("https://raw.githubusercontent.com/joocfresh/joocBot/main/PatchNote.md").Result;
+                }
+                catch (Exception ex)
+                {
+                    Console.WriteLine($"Error: {ex.Message}");
+                    return ex.Message;
+                }
+            }
+            //return "패치노트: \n" + File.ReadAllText(@"project/PatchNote.md");
         }
         private EmbedBuilder GetSubEventMessage(BattleEvent battleEvent, string id)
         {
