@@ -4,6 +4,7 @@ using Discord.WebSocket;
 using joocBot.Albion;
 using joocBot.Models;
 using joocBot.Repositories;
+using Markdig;
 using System;
 using System.Linq;
 using System.Reflection.Metadata.Ecma335;
@@ -133,6 +134,10 @@ namespace DiscordBot
                     break;
                 case "h":case "help":case "도움말":case "하이구글리":
                     returnMessage = GetHelpMessage();
+                    _isMessageShow = true;
+                    break;
+                case "p":case "patch":case "패치": case"패치노트":
+                    returnMessage = GetHelpPatchNote();
                     _isMessageShow = true;
                     break;
                 case "k":case "killlog": case "킬": case "킬로그":
@@ -379,7 +384,36 @@ namespace DiscordBot
         }
         private string GetHelpMessage()
         {
-            return "도움말 불러오기 \n"+ File.ReadAllText(@"project/Help.md");
+            using (HttpClient client = new HttpClient())
+            {
+                try
+                {
+                    return Environment.NewLine + "[구글리의 깃허브에서 사용법 보기](https://github.com/joocfresh/joocBot/blob/joocfresh-patch-1/Help.md) 링크를 클릭하고 구글리의 깃허브로 놀러와서 별주세요.";
+                        //client.GetStringAsync("https://raw.githubusercontent.com/joocfresh/joocBot/main/Help.md").Result;
+                }
+                catch (Exception ex)
+                {
+                    Console.WriteLine($"Error: {ex.Message}");
+                    return ex.Message;
+                }
+            }
+            //return "도움말 불러오기 \n"+ File.ReadAllText(@"project/Help.md");
+        }
+        private string GetHelpPatchNote()
+        {
+            using (HttpClient client = new HttpClient())
+            {
+                try
+                {
+                    return Environment.NewLine + client.GetStringAsync("https://raw.githubusercontent.com/joocfresh/joocBot/main/PatchNote.md").Result;
+                }
+                catch (Exception ex)
+                {
+                    Console.WriteLine($"Error: {ex.Message}");
+                    return ex.Message;
+                }
+            }
+            //return "패치노트: \n" + File.ReadAllText(@"project/PatchNote.md");
         }
         private EmbedBuilder GetSubEventMessage(BattleEvent battleEvent, string id)
         {
@@ -506,7 +540,7 @@ namespace DiscordBot
             var victim = $"{Environment.NewLine}길드: {victimAllianceName}{victimGuildName}{Environment.NewLine}유저: **{battleEvent.Victim.Name}**     :skull_crossbones: {Environment.NewLine}IP: {(int)battleEvent.Victim.AverageItemPower}{Environment.NewLine}";
             string contributers = string.Empty;
 
-            var datetime = $"발생일시: { battleEvent.TimeStamp.ToString()} \n발생장소:{battleEvent.KillArea.ToString()}";
+            var datetime = $"발생일시: { battleEvent.TimeStamp.ToString()}(UTC) \n발생장소:{battleEvent.KillArea.ToString()}";
             var contributer = new StringBuilder("\n 어시스트:");
 
 
