@@ -351,7 +351,7 @@ namespace DiscordBot
                     }
 
                     //await context.Channel.SendMessageAsync($"구독중... {subscriptionInfo.Name}\n{memberList}");
-                    memberRepository.SaveALL(members);
+                    //memberRepository.SaveALL(members);
                     subscriptionInfo = new SubscribedChannelRepository().GetAll()?.FirstOrDefault(item => item.Id == key);
                     Thread.Sleep(5000);
                 }
