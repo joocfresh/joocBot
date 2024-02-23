@@ -6,7 +6,10 @@ using joocBot.Models;
 using joocBot.Repositories;
 using Markdig;
 using System;
+using System.Drawing;
+using System.Drawing.Imaging;
 using System.Linq;
+using System.Net;
 using System.Reflection.Metadata.Ecma335;
 using System.Text;
 using System.Threading.Channels;
@@ -144,9 +147,10 @@ namespace DiscordBot
                     var id = _lbionQueryManager.ConvertNameToIdOne(param);
                     var killEvent = _lbionQueryManager.SearchPlayersRecentEvent(param);
                     var inventoryCount = killEvent.Victim.Inventory?.Count(item => item != null);
-                    embed = GetEventMessage(killEvent, id);
+                    embed = GetEventMessage(killEvent, id, context);
                     subEmbed = (inventoryCount > 0) ? GetSubEventMessage(killEvent, id) : new EmbedBuilder();
-                    _isSubEmbedShow = (inventoryCount > 0)? true:false; _isMessageShow = true; _isEmbedShow = true;
+                    _isSubEmbedShow = (inventoryCount > 0) ? true : false;
+                    //_isSubEmbedShow = (inventoryCount > 0)? true:false; _isMessageShow = true; _isEmbedShow = true;
                     break;
                 case "subscribe":case "구독":
                     var channelRepository = new SubscribedChannelRepository();
@@ -326,16 +330,15 @@ namespace DiscordBot
                                 member.LastKillEvent = element.BattleId;
                             var inventoryCount = element.Victim.Inventory?.Count(item => item != null);
 
-                            var embed = GetEventMessage(element, member.PlayerId);
-                            EmbedBuilder? subEmbed = (inventoryCount > 0) ? GetSubEventMessage(element, member.PlayerId) : new EmbedBuilder();
-
-                            await context.Channel.SendMessageAsync(embed: embed.Build());
+                            var embed = GetEventMessage(element, member.PlayerId, context);
+                            //await context.Channel.SendMessageAsync(embed: embed.Build());
                             if (inventoryCount > 0)
                             {
-                                Thread.Sleep(50);
+                                //Thread.Sleep(50);
+                                EmbedBuilder? subEmbed = GetSubEventMessage(element, member.PlayerId);
                                 await context.Channel.SendMessageAsync(embed: subEmbed.Build());
                             }
-                            Thread.Sleep(1000);
+                            Thread.Sleep(1500);
                         }
 
                         //var killEvent = _lbionQueryManager.SearchPlayersRecentEvent(member.PlayerName,member.PlayerId);
@@ -343,8 +346,8 @@ namespace DiscordBot
                         //    continue;
                         //else
                         //    member.LastKillEvent = killEvent.BattleId;
-                        
-                        Thread.Sleep(1000);
+                        memberRepository.SaveOne(member);
+                        Thread.Sleep(2000);
                     }
 
                     //await context.Channel.SendMessageAsync($"구독중... {subscriptionInfo.Name}\n{memberList}");
@@ -418,7 +421,7 @@ namespace DiscordBot
         private EmbedBuilder GetSubEventMessage(BattleEvent battleEvent, string id)
         {
             string title;
-            Color color;
+            Discord.Color color;
             string footerText = "Powered by GooglyMoogly";
             string server;
             string fieldTitle = $"팬티 털어서 나온것들: ";
@@ -434,12 +437,12 @@ namespace DiscordBot
 
             if (battleEvent.Killer.Id == id)
             {
-                color = Color.Green;
+                color = Discord.Color.Green;
                 title = $"[{battleEvent.Killer.GuildName}] {battleEvent.Killer.Name}님이 [{battleEvent.Victim.GuildName}] {battleEvent.Victim.Name}를 죽임.";
             }
             else
             {
-                color = Color.Red;
+                color = Discord.Color.Red;
                 title = $"[{battleEvent.Victim.GuildName}] {battleEvent.Victim.Name}님이 [{battleEvent.Killer.GuildName}] {battleEvent.Killer.Name}한테 당함.";
             }
 
@@ -459,36 +462,43 @@ namespace DiscordBot
 
             return embed;
         }
-        private EmbedBuilder GetEventMessage(BattleEvent battleEvent, string id) 
+        private EmbedBuilder GetEventMessage(BattleEvent battleEvent, string id , SocketCommandContext context) 
         {
             string title;
-            Color color;
+            Discord.Color color;
             string footerText = "Powered by GooglyMoogly";
             string server;
             string fieldTitle = $"￡킬명성: {battleEvent.TotalVictimKillFame.ToString()}";
             string fieldContext = GetFiledContext(battleEvent);
             string description;
 
-            if (_lbionQueryManager.GetRegion() == "Eastern")
+            if (_lbionQueryManager.GetRegion().Contains("Eastern"))
                 server = "live_sgp";
             else
                 server = "live";
 
             string url = $"https://albiononline.com/killboard/kill/{battleEvent.EventId}?server={server}";
 
+            var imagePaths = GetImagePaths(battleEvent);
+            //var killboardImage = 
+            var killboardImagePath = GetKillboardImage(imagePaths, battleEvent);
+            
+            var channelid = context.Channel.Id;
+            var guildid = context.Guild.Id;
+            // https://media.discordapp.net/attachments/1177166136375259196/1210461696825753610/196415874.png?ex=65eaa54d&is=65d8304d&hm=c8d4ccbe437c73856c9d9f9a4eaeab05c1accc4bbc0707e10e523e674eea1d6c&=&format=webp&quality=lossless&width=572&height=384
             var kGuildName = string.IsNullOrEmpty(battleEvent.Killer.GuildName) ? string.Empty : $"[{battleEvent.Killer.GuildName}]";
             var vGuildName = string.IsNullOrEmpty(battleEvent.Victim.GuildName) ? string.Empty : $"[{battleEvent.Victim.GuildName}]";
 
             if (battleEvent.Killer.Id == id)
             {
-                color = Color.Green;
+                color = Discord.Color.Green;
                 title = $"{kGuildName}{battleEvent.Killer.Name}님이 {vGuildName}{battleEvent.Victim.Name}를 죽임.";
                 description = "\n\n사망! 머더퍼커!\n";
             }
             else
             {
                 description = "\n\n이런날도있는거죠 뭐...\n";
-                color = Color.Red;
+                color = Discord.Color.Red;
                 title = $"{vGuildName}{battleEvent.Victim.Name}님이 {kGuildName}{battleEvent.Killer.Name}한테 당함.";
             }
 
@@ -508,16 +518,245 @@ namespace DiscordBot
                 .WithUrl(url)
                 .WithCurrentTimestamp();
 
+            context.Channel.SendFileAsync(killboardImagePath, "이벤트발생 - ", false, embed.Build());
             return embed;
         }
+
+        private string GetKillboardImage(string[] imagePaths, BattleEvent battleEvent)
+        {
+            string eventId = battleEvent.EventId.ToString();
+            var imagePath = $"./screenshot/{eventId}.png";
+            try
+            {
+                //백그라운드 이미지 경로
+                string gearImagePath = "https://render.albiononline.com/v1/item/T8_BAG@0.png?count=1&quality=0";
+                string backgroundImagePath = "https://assets.albiononline.com/assets/images/killboard/gear.png?u91ddb7ca";
+                string victimImagePath = "https://cdn2.iconfinder.com/data/icons/military-31/200/blood_kill_mark_splatter_kills_murder-512.png";
+                string fameImagePath = "https://assets.albiononline.com/assets/images/killboard/fame-list__icons.png?u91ddb7ca";
+
+                // 이미지 및 백그라운드 이미지 로딩
+                var images = new System.Drawing.Image[imagePaths.Length];
+                for (int i = 0; i < imagePaths.Length; i++)
+                {
+                    images[i] = LoadImage(imagePaths[i]);
+                }
+                var gearImage = LoadImage(gearImagePath);
+                var backgroundImage = LoadImage(backgroundImagePath);
+                var victimImage = LoadImage(victimImagePath);
+                var fameImage = LoadImage(fameImagePath);
+
+                // 투명도 조절
+                float opacity = 0.5f; // 투명도를 조절하려면 0.0부터 1.0 사이의 값을 사용하세요
+                ImageAttributes imageAttributes = new ImageAttributes();
+                ColorMatrix transparencyMatrix = new ColorMatrix
+                {
+                    Matrix33 = opacity // 투명도 값을 설정합니다.
+                };
+                imageAttributes.SetColorMatrix(transparencyMatrix, ColorMatrixFlag.Default, ColorAdjustType.Bitmap);
+
+
+                // 격자 크기 및 여백 설정
+                int rows = 4;
+                int cols = 7;
+                int spacing = 5;
+
+                int upperPadding = 150;
+
+                // 전체 격자 크기 계산
+                int gridWidth = cols * (gearImage.Width + spacing) - spacing;
+                int gridHeight = rows * (gearImage.Height + spacing) - spacing;
+
+                // 전체 스크린샷 크기 계산
+                int screenWidth = gridWidth + 20; // 여분의 여백
+                int screenHeight = gridHeight + 20; // 여분의 여백
+
+                int colWidth = (gridWidth / 7);
+
+                backgroundImage = new Bitmap(backgroundImage, new Size((int)(colWidth * 3.3), gridHeight));
+                victimImage = new Bitmap(victimImage, new Size((int)(colWidth * 3.3), gridHeight));
+
+                // 전체 스크린샷 생성
+                using (Bitmap screenshot = new Bitmap(screenWidth, screenHeight + upperPadding))
+                using (SolidBrush brush = new SolidBrush(System.Drawing.Color.Black))
+                using (Graphics g = Graphics.FromImage(screenshot))
+                {
+                    g.Clear(System.Drawing.Color.FromArgb(222,222,218));
+
+                    // 킬러 슬롯
+                    g.DrawImage(backgroundImage, 0, upperPadding);
+                    // 희생자 슬롯
+                    g.DrawImage(backgroundImage, (int)(colWidth * 3.7), upperPadding);
+
+                    // 희생자 혈흔
+                    g.DrawImage(victimImage,
+                    new Rectangle(colWidth * 4, upperPadding, colWidth * 3, screenHeight),
+                        0, 0, colWidth * 3, screenHeight,
+                        GraphicsUnit.Pixel,
+                        imageAttributes
+                        );
+
+                    // 토탈 페임
+                    g.DrawImage(fameImage, 
+                        new Rectangle(colWidth * 3 + colWidth/2 - 74/2, (screenHeight/2) - 200, 74, 74),
+                        0, 0, fameImage.Width/14, fameImage.Height, 
+                        GraphicsUnit.Pixel
+                        );
+                    var stringFormat = new StringFormat() 
+                    { 
+                        Alignment=StringAlignment.Center,
+                        LineAlignment=StringAlignment.Center,
+                    };
+                    var font = new Font("Arial", 50, FontStyle.Bold, GraphicsUnit.Pixel);
+                    g.DrawString(battleEvent.TotalVictimKillFame.ToString(), font, brush, colWidth * 3 + colWidth / 2, (screenHeight / 2) - 150 + font.Height, stringFormat);
+
+                    var timeFont = new Font("Arial", 20, FontStyle.Regular, GraphicsUnit.Pixel);
+
+                    // 이벤트 시간
+                    g.DrawString("UTC (KR +9)", timeFont, brush, colWidth * 3 + colWidth / 2, 50 + font.Height - timeFont.Height, stringFormat);
+                    g.DrawString(battleEvent.TimeStamp.ToString(), timeFont, brush, colWidth * 3 + colWidth / 2, 50 + font.Height, stringFormat);
+
+                    // 킬러 이름
+                    var killerName = $"[{battleEvent.Killer.GuildName}]{battleEvent.Killer.Name}";
+                    var killerItemPower = $"IP : {battleEvent.Killer.AverageItemPower}";
+                    g.DrawString(killerName, font, brush, colWidth * 1 + colWidth / 2, 50, stringFormat);
+
+                    // 희생자 이름
+                    var victimName = $"[{battleEvent.Victim.GuildName}]{battleEvent.Victim.Name}";
+                    var victimItemPower = $"IP : {battleEvent.Victim.AverageItemPower}";
+                    g.DrawString(victimName, font, brush, colWidth * 5 + colWidth / 2, 50, stringFormat);
+
+                    // 킬러 IP
+                    var ipFont = new Font("Arial", 40, FontStyle.Italic, GraphicsUnit.Pixel);
+                    g.DrawString(killerItemPower, ipFont, brush, colWidth * 1 + colWidth / 2, 50 + font.Height, stringFormat);
+
+                    // 희생자 IP
+                    g.DrawString(victimItemPower, ipFont, brush, colWidth * 5 + colWidth / 2, 50 + font.Height, stringFormat);
+
+                    // 격자에 이미지 및 백그라운드 이미지 배치
+                    for (int i = 0; i < rows; i++)
+                    {
+                        int row = i;
+
+                        int x = spacing;
+                        int y = spacing; // 상단에 배치
+                        int offset = 0;
+                        int rightPadding = spacing;
+                        int bottomPadding = spacing;
+
+                        if (i == rows - 1)
+                            bottomPadding = 0;
+                        // 나머지 칸에 이미지 배치
+                        for (int j = 0; j < cols; j++)
+                        {
+                            int col = j;
+                            if (j == cols - 1)
+                                rightPadding = 0;
+                            y = row * (gearImage.Height + spacing) + upperPadding;
+                            x = (col) * (gearImage.Width + spacing);
+
+
+                            g.DrawImage(images[j + (row * cols)], x, y);
+                        }
+
+                    }
+                    
+                    // 스크린샷 저장
+                    screenshot.Save(imagePath, System.Drawing.Imaging.ImageFormat.Png);
+                }
+                return imagePath;
+            }
+            catch 
+            {
+                return string.Empty;
+            }      
+        }
+        static System.Drawing.Image LoadImage(string url)
+        {
+            try
+            {
+                using (var webClient = new WebClient())
+                {
+                    var stream = webClient.OpenRead(url);
+                    return System.Drawing.Image.FromStream(stream);
+                }
+            }
+            catch
+            {
+                return new System.Drawing.Bitmap(11, 11);
+            }
+
+        }
+
+        private string[] GetImagePaths(BattleEvent battleEvent)
+        {
+            List<string> imagePaths = new List<string>();
+            var equipments = new List<Gear>();
+            equipments.Add(battleEvent.Killer.Equipment.Bag ?? new Gear());
+            equipments.Add(battleEvent.Killer.Equipment.Head ?? new Gear());
+            equipments.Add(battleEvent.Killer.Equipment.Cape ?? new Gear());
+
+            equipments.Add(new Gear());
+
+            equipments.Add(battleEvent.Victim.Equipment.Bag ?? new Gear());
+            equipments.Add(battleEvent.Victim.Equipment.Head ?? new Gear());
+            equipments.Add(battleEvent.Victim.Equipment.Cape ?? new Gear());
+
+
+            equipments.Add(battleEvent.Killer.Equipment.MainHand ?? new Gear());
+            equipments.Add(battleEvent.Killer.Equipment.Armor ?? new Gear());
+            equipments.Add(battleEvent.Killer.Equipment.OffHand ?? new Gear());
+
+            equipments.Add(new Gear());
+
+            equipments.Add(battleEvent.Victim.Equipment.MainHand ?? new Gear());
+            equipments.Add(battleEvent.Victim.Equipment.Armor ?? new Gear());
+            equipments.Add(battleEvent.Victim.Equipment.OffHand ?? new Gear());
+
+
+            equipments.Add(battleEvent.Killer.Equipment.Potion ?? new Gear());
+            equipments.Add(battleEvent.Killer.Equipment.Shoes ?? new Gear());
+            equipments.Add(battleEvent.Killer.Equipment.Food ?? new Gear());
+
+            equipments.Add(new Gear());
+
+            equipments.Add(battleEvent.Victim.Equipment.Potion ?? new Gear());
+            equipments.Add(battleEvent.Victim.Equipment.Shoes ?? new Gear());
+            equipments.Add(battleEvent.Victim.Equipment.Food ?? new Gear());
+
+
+            equipments.Add(new Gear());
+            equipments.Add(battleEvent.Killer.Equipment.Mount ?? new Gear());
+            equipments.Add(new Gear());
+
+            equipments.Add(new Gear());
+
+            equipments.Add(new Gear());
+            equipments.Add(battleEvent.Victim.Equipment.Mount ?? new Gear());
+            equipments.Add(new Gear());
+
+            foreach (var equipment in equipments)
+            {
+                if (equipment.Type != null)
+                {
+                    imagePaths.Add(GetGearImageUrl(equipment.Type, equipment.Count, equipment.Quality));
+                }
+                else
+                {
+                    imagePaths.Add(string.Empty);
+                }
+            }
+
+            return imagePaths.ToArray();
+        }
+
         private string GetGearImageUrl(string? name,int count, int quality)
         {
             return $"https://render.albiononline.com/v1/item/{name}.png?count={count}&quality={quality}";
         }
         private string GetFiledContext(BattleEvent battleEvent)
         {
-            var killersGear = GetEquipmentContext(battleEvent.Killer.Equipment);
-            var victimsGear = GetEquipmentContext(battleEvent.Victim.Equipment);
+            var killersGear = ""; //GetEquipmentContext(battleEvent.Killer.Equipment);
+            var victimsGear = ""; //GetEquipmentContext(battleEvent.Victim.Equipment);
             //var inventory = GetInventoryItems(battleEvent.Victim.Inventory);
 
             Func<string, string> Nvl = delegate (string name)
@@ -568,7 +807,8 @@ namespace DiscordBot
                 contributers = contributers + partyMember.ToString();
             }
 
-            var result = killer + killersGear.ToString() + victim + victimsGear.ToString() + contributers + datetime;
+            //var result = killer + killersGear.ToString() + victim + victimsGear.ToString() + contributers + datetime;
+            var result = killer + victim + contributers + datetime;
             return result;
         }
         private StringBuilder GetInventoryItems(Gear[]? inventory)
