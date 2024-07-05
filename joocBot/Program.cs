@@ -656,12 +656,28 @@ namespace DiscordBot
 
 
                             g.DrawImage(images[j + (row * cols)], x, y);
+
+                            int idx = j + (row * cols);
+                            if (idx == 9|| idx == 13)
+                            {
+                                if (imagePaths[idx - 2].Contains("_2H_"))
+                                {
+                                    g.DrawImage(images[idx - 2],
+                                        new Rectangle(x, y, colWidth, colWidth),
+                                        0, 0, colWidth, colWidth,
+                                        GraphicsUnit.Pixel,
+                                        imageAttributes);
+                                }
+                            }
                         }
 
                     }
                     
                     // 스크린샷 저장
                     screenshot.Save(imagePath, System.Drawing.Imaging.ImageFormat.Png);
+
+                    transparencyMatrix = null;
+                    imageAttributes.Dispose();
                 }
                 return imagePath;
             }
