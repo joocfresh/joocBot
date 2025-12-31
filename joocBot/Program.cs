@@ -149,7 +149,7 @@ namespace DiscordBot
                     var killEvent = _lbionQueryManager.SearchPlayersRecentEvent(param);
                     var inventoryCount = killEvent.Victim.Inventory?.Count(item => item != null);
                     embed = GetEventMessage(killEvent, id, context);
-                    subEmbed = (inventoryCount > 0) ? GetSubEventMessage(killEvent, id, context) : new EmbedBuilder();
+                    //subEmbed = (inventoryCount > 0) ? GetSubEventMessage(killEvent, id, context) : new EmbedBuilder();
                     //_isSubEmbedShow = (inventoryCount > 0) ? true : false;
                     //_isSubEmbedShow = (inventoryCount > 0)? true:false; _isMessageShow = true; _isEmbedShow = true;
                     break;
@@ -333,12 +333,12 @@ namespace DiscordBot
 
                             var embed = GetEventMessage(element, member.PlayerId, context);
                             //await context.Channel.SendMessageAsync(embed: embed.Build());
-                            if (inventoryCount > 0)
-                            {
-                                //Thread.Sleep(50);
-                                EmbedBuilder? subEmbed = GetSubEventMessage(element, member.PlayerId, context);
-                                //await context.Channel.SendMessageAsync(embed: subEmbed.Build());
-                            }
+                            //if (inventoryCount > 0)
+                            //{
+                            //    //Thread.Sleep(50);
+                            //    EmbedBuilder? subEmbed = GetSubEventMessage(element, member.PlayerId, context);
+                            //    //await context.Channel.SendMessageAsync(embed: subEmbed.Build());
+                            //}
                             Thread.Sleep(1500);
                         }
 
@@ -454,7 +454,7 @@ namespace DiscordBot
             Discord.Color color;
             string footerText = "Powered by GooglyMoogly5404";
             string server;
-            string fieldTitle = $"￡킬명성: {battleEvent.TotalVictimKillFame.ToString()}";
+            string fieldTitle = $"🎯 명성: {battleEvent.TotalVictimKillFame.ToString()} \n인벤토리: 총 {battleEvent.Victim.Inventory?.Count(item => item != null)}개 품목\n";
             string fieldContext = GetFiledContext(battleEvent);
             string description;
 
@@ -468,24 +468,32 @@ namespace DiscordBot
             var imagePaths = GetImagePaths(battleEvent);
             //var killboardImage = 
             var killboardImagePath = GetKillboardImage(imagePaths, battleEvent);
-            
+            // 디스코드 CDN에 이미지 저장후 저장된 이미지 경로 가져오기
+            var InventoryImagePath = GetInventoryImage(GetInventoryPaths(battleEvent.Victim.Inventory), battleEvent);
+
             var channelid = context.Channel.Id;
             var guildid = context.Guild.Id;
             // https://media.discordapp.net/attachments/1177166136375259196/1210461696825753610/196415874.png?ex=65eaa54d&is=65d8304d&hm=c8d4ccbe437c73856c9d9f9a4eaeab05c1accc4bbc0707e10e523e674eea1d6c&=&format=webp&quality=lossless&width=572&height=384
             var kGuildName = string.IsNullOrEmpty(battleEvent.Killer.GuildName) ? string.Empty : $"[{battleEvent.Killer.GuildName}]";
             var vGuildName = string.IsNullOrEmpty(battleEvent.Victim.GuildName) ? string.Empty : $"[{battleEvent.Victim.GuildName}]";
+            string lamp = string.Empty;
+            string loot = string.Empty;
 
             if (battleEvent.Killer.Id == id)
             {
                 color = Discord.Color.Green;
                 title = $"{kGuildName}{battleEvent.Killer.Name}님이 {vGuildName}{battleEvent.Victim.Name}를 죽임.";
                 description = "\n\n사망! 머더퍼커!\n";
+                lamp = "🟢 ";//
+                loot = "💰 수익";
             }
             else
             {
                 description = "\n\n이런날도있는거죠 뭐...\n";
                 color = Discord.Color.Red;
                 title = $"{vGuildName}{battleEvent.Victim.Name}님이 {kGuildName}{battleEvent.Killer.Name}한테 당함.";
+                lamp = "🔴 ";//
+                loot = "💸 헌납";
             }
 
             var embed = new EmbedBuilder
@@ -504,7 +512,8 @@ namespace DiscordBot
                 .WithUrl(url)
                 .WithCurrentTimestamp();
 
-            context.Channel.SendFileAsync(killboardImagePath, "이벤트발생 - ", false, embed.Build());
+            context.Channel.SendFileAsync(killboardImagePath, $"### {lamp}이벤트 발생: ", false);
+            context.Channel.SendFileAsync(InventoryImagePath, $"### {loot}: 착용장비 외 {battleEvent.Victim.Inventory?.Count(item => item != null)} 품목", false);
             return embed;
         }
 
@@ -981,10 +990,6 @@ namespace DiscordBot
         }
         private string GetFiledContext(BattleEvent battleEvent)
         {
-            var killersGear = ""; //GetEquipmentContext(battleEvent.Killer.Equipment);
-            var victimsGear = ""; //GetEquipmentContext(battleEvent.Victim.Equipment);
-            //var inventory = GetInventoryItems(battleEvent.Victim.Inventory);
-
             Func<string, string> Nvl = delegate (string name)
             {
                 return string.IsNullOrEmpty(name)?"없음":name;
