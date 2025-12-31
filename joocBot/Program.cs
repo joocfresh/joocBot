@@ -483,17 +483,17 @@ namespace DiscordBot
             {
                 color = Discord.Color.Green;
                 title = $"{kGuildName}{battleEvent.Killer.Name}님이 {vGuildName}{battleEvent.Victim.Name}를 죽임.";
-                description = "\n\n사망! 머더퍼커!\n";
+                description = "사망! 머더퍼커!\n";
                 lamp = "🟢 ";//
-                loot = "💰 수익";
+                loot = "💰 부가수익";
             }
             else
             {
-                description = "\n\n이런날도있는거죠 뭐...\n";
+                description = "이런날도있는거죠 뭐...\n";
                 color = Discord.Color.Red;
                 title = $"{vGuildName}{battleEvent.Victim.Name}님이 {kGuildName}{battleEvent.Killer.Name}한테 당함.";
                 lamp = "🔴 ";//
-                loot = "💸 헌납";
+                loot = "💸 부가손실";
             }
 
             var embed = new EmbedBuilder
@@ -512,7 +512,7 @@ namespace DiscordBot
                 .WithUrl(url)
                 .WithCurrentTimestamp();
 
-            context.Channel.SendFileAsync(killboardImagePath, $"### {lamp}이벤트 발생: ", false);
+            context.Channel.SendFileAsync(killboardImagePath, $"### {lamp}이벤트 발생: {description}", false);
             context.Channel.SendFileAsync(InventoryImagePath, $"### {loot}: 착용장비 외 {battleEvent.Victim.Inventory?.Count(item => item != null)} 품목", false);
             return embed;
         }
