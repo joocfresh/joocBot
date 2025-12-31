@@ -7,6 +7,7 @@ using joocBot.Repositories;
 using Markdig;
 using System;
 using System.Drawing;
+using System.Drawing.Drawing2D;
 using System.Drawing.Imaging;
 using System.Linq;
 using System.Net;
@@ -148,8 +149,8 @@ namespace DiscordBot
                     var killEvent = _lbionQueryManager.SearchPlayersRecentEvent(param);
                     var inventoryCount = killEvent.Victim.Inventory?.Count(item => item != null);
                     embed = GetEventMessage(killEvent, id, context);
-                    subEmbed = (inventoryCount > 0) ? GetSubEventMessage(killEvent, id) : new EmbedBuilder();
-                    _isSubEmbedShow = (inventoryCount > 0) ? true : false;
+                    subEmbed = (inventoryCount > 0) ? GetSubEventMessage(killEvent, id, context) : new EmbedBuilder();
+                    //_isSubEmbedShow = (inventoryCount > 0) ? true : false;
                     //_isSubEmbedShow = (inventoryCount > 0)? true:false; _isMessageShow = true; _isEmbedShow = true;
                     break;
                 case "subscribe":case "구독":
@@ -335,8 +336,8 @@ namespace DiscordBot
                             if (inventoryCount > 0)
                             {
                                 //Thread.Sleep(50);
-                                EmbedBuilder? subEmbed = GetSubEventMessage(element, member.PlayerId);
-                                await context.Channel.SendMessageAsync(embed: subEmbed.Build());
+                                EmbedBuilder? subEmbed = GetSubEventMessage(element, member.PlayerId, context);
+                                //await context.Channel.SendMessageAsync(embed: subEmbed.Build());
                             }
                             Thread.Sleep(1500);
                         }
@@ -366,10 +367,6 @@ namespace DiscordBot
                 return;
             subscriptionInfo.IsSubscribed = false;
             channelRepository.SaveOne(subscriptionInfo);
-        }
-        private void RegisterChannel()
-        {
-
         }
         private string GetPlayerInfos(string lookupName)
         {
@@ -418,55 +415,44 @@ namespace DiscordBot
             }
             //return "패치노트: \n" + File.ReadAllText(@"project/PatchNote.md");
         }
-        private EmbedBuilder GetSubEventMessage(BattleEvent battleEvent, string id)
+        private EmbedBuilder GetSubEventMessage(BattleEvent battleEvent, string id, SocketCommandContext context)
         {
-            string title;
             Discord.Color color;
-            string footerText = "Powered by GooglyMoogly";
-            string server;
-            string fieldTitle = $"팬티 털어서 나온것들: ";
+            string footerText = "Powered by GooglyMoogly5404";
+            string fieldTitle = $"노획한 아이템: ";
             string fieldValue = $"총 {battleEvent.Victim.Inventory?.Count(item => item != null)}개 품목";
-            string description = GetInventoryItems(battleEvent.Victim.Inventory).ToString();
+            string description;
 
-            if (_lbionQueryManager.GetRegion() == "Eastern")
-                server = "live_sgp";
-            else
-                server = "live";
-
-            string url = $"https://albiononline.com/killboard/kill/{battleEvent.EventId}?server={server}";
+            var imagePaths = GetInventoryPaths(battleEvent.Victim.Inventory);
+            // 디스코드 CDN에 이미지 저장후 저장된 이미지 경로 가져오기
+            var InventoryImagePath = GetInventoryImage(imagePaths, battleEvent);
 
             if (battleEvent.Killer.Id == id)
             {
                 color = Discord.Color.Green;
-                title = $"[{battleEvent.Killer.GuildName}] {battleEvent.Killer.Name}님이 [{battleEvent.Victim.GuildName}] {battleEvent.Victim.Name}를 죽임.";
+                description = "\n\n보나조이!\n";
             }
             else
             {
                 color = Discord.Color.Red;
-                title = $"[{battleEvent.Victim.GuildName}] {battleEvent.Victim.Name}님이 [{battleEvent.Killer.GuildName}] {battleEvent.Killer.Name}한테 당함.";
+                description = "\n\n뱅킹할껄!\n";
             }
 
-            var embed = new EmbedBuilder
-            {
-                // Embed property can be set within object initializer
-                Title = "**노획한 아이템 리스트**",
-                Description = "I am a description set by initializer."
-            };
-
+            var embed = new EmbedBuilder();
             embed.AddField(fieldTitle, fieldValue)
                 .WithFooter(footer => footer.Text = footerText)
                 .WithColor(color)
-                .WithImageUrl("https://render.albiononline.com/v1/item/T8_BAG@0.png?count=1&quality=0")
-                .WithDescription(description)
+                .WithTitle(description)
                 .WithCurrentTimestamp();
 
+            context.Channel.SendFileAsync(InventoryImagePath, "이벤트발생 - ", false, embed.Build());
             return embed;
         }
         private EmbedBuilder GetEventMessage(BattleEvent battleEvent, string id , SocketCommandContext context) 
         {
             string title;
             Discord.Color color;
-            string footerText = "Powered by GooglyMoogly";
+            string footerText = "Powered by GooglyMoogly5404";
             string server;
             string fieldTitle = $"￡킬명성: {battleEvent.TotalVictimKillFame.ToString()}";
             string fieldContext = GetFiledContext(battleEvent);
@@ -672,9 +658,14 @@ namespace DiscordBot
                         }
 
                     }
-                    
-                    // 스크린샷 저장
-                    screenshot.Save(imagePath, System.Drawing.Imaging.ImageFormat.Png);
+
+                    // 스크린샷 저장 (25% 리사이즈)
+                    float scale = 0.25f;
+
+                    using (var resized = ResizeBitmapHighQuality(screenshot, scale))
+                    {
+                        resized.Save(imagePath, System.Drawing.Imaging.ImageFormat.Png);
+                    }
 
                     transparencyMatrix = null;
                     imageAttributes.Dispose();
@@ -685,6 +676,164 @@ namespace DiscordBot
             {
                 return string.Empty;
             }      
+        }
+        private string GetInventoryImage(string[] imagePaths, BattleEvent battleEvent)
+        {
+            string eventId = battleEvent.EventId.ToString();
+            var imagePath = $"./screenshot/{eventId}_inv.png";
+
+            try
+            {
+                // ====== 설정 ======
+                int cols = 9;
+                int maxRows = 6;
+                int maxItems = cols * maxRows; // 54
+
+                int spacing = 5;
+                int padding = 10;
+
+                // 25% 저장 축소 (원하면 0.33f, 0.5f 등으로 조절)
+                float saveScale = 0.25f;
+
+                // 아이템 수
+                int itemCount = Math.Min(imagePaths?.Length ?? 0, maxItems);
+                if (itemCount <= 0)
+                    return string.Empty;
+
+                int rows = (int)Math.Ceiling(itemCount / (double)cols);
+                rows = Math.Min(rows, maxRows);
+
+                // 아이템 템플릿(가방 아이콘)로 셀 크기 결정
+                // (기존 Killboard처럼 render 서버 아이콘을 기준 셀로 사용)
+                string gearImagePath = "https://render.albiononline.com/v1/item/T8_BAG@0.png?count=1&quality=0";
+                using var gearImage = LoadImage(gearImagePath); // 연구원님 기존 함수 사용 가정
+
+                int cell = gearImage.Width; // 정사각 셀로 사용
+                int gridWidth = cols * cell + (cols - 1) * spacing;
+                int gridHeight = rows * cell + (rows - 1) * spacing;
+
+                int screenWidth = gridWidth + padding * 2;
+                int screenHeight = gridHeight + padding * 2;
+
+                // 배경색(킬보드와 유사 톤)
+                var bgColor = System.Drawing.Color.FromArgb(202, 192, 181);
+
+                // ====== 이미지 로드 (필요한 것만) ======
+                var images = new System.Drawing.Image[itemCount];
+                for (int i = 0; i < itemCount; i++)
+                    images[i] = LoadImageOrPlaceholder(imagePaths[i], cell);
+
+                // ====== 렌더링 ======
+                using (var screenshot = new Bitmap(screenWidth, screenHeight, PixelFormat.Format32bppArgb))
+                using (var g = Graphics.FromImage(screenshot))
+                using (var brush = new SolidBrush(System.Drawing.Color.Black))
+                {
+                    g.Clear(bgColor);
+                    g.CompositingQuality = CompositingQuality.HighQuality;
+                    g.InterpolationMode = InterpolationMode.HighQualityBicubic;
+                    g.SmoothingMode = SmoothingMode.HighQuality;
+                    g.PixelOffsetMode = PixelOffsetMode.HighQuality;
+
+                    // (선택) 상단 제목/정보 영역 넣고 싶으면 여기서 추가 가능
+                    // 예: Victim 이름 + 인벤토리 요약
+                    // var titleFont = new Font("Arial", 24, FontStyle.Bold, GraphicsUnit.Pixel);
+                    // g.DrawString($"Inventory - {battleEvent.Victim.Name}", titleFont, brush, padding, 5);
+
+                    // 격자 배치
+                    for (int idx = 0; idx < itemCount; idx++)
+                    {
+                        int row = idx / cols;
+                        int col = idx % cols;
+
+                        int x = padding + col * (cell + spacing);
+                        int y = padding + row * (cell + spacing);
+
+                        // 셀 배경(살짝 음영)
+                        using (var cellBg = new SolidBrush(System.Drawing.Color.FromArgb(240, 240, 235)))
+                        {
+                            g.FillRectangle(cellBg, x, y, cell, cell);
+                        }
+
+                        // 아이템 이미지: 셀에 꽉 차게 "중앙 크롭"으로 넣음
+                        DrawImageCover(g, images[idx], new Rectangle(x, y, cell, cell));
+
+                        // (선택) 셀 테두리
+                        using (var pen = new Pen(System.Drawing.Color.FromArgb(160, 160, 160), 1))
+                        {
+                            g.DrawRectangle(pen, x, y, cell, cell);
+                        }
+                    }
+
+                    // 1) 원본 저장(필요시)
+                    // screenshot.Save(imagePath, ImageFormat.Png);
+
+                    // 2) 축소 저장(권장)
+                    using (var resized = ResizeBitmapHighQuality(screenshot, saveScale))
+                    {
+                        resized.Save(imagePath, System.Drawing.Imaging.ImageFormat.Png);
+                    }
+                }
+
+                // 메모리 정리
+                for (int i = 0; i < itemCount; i++)
+                    images[i]?.Dispose();
+
+                return imagePath;
+            }
+            catch
+            {
+                return string.Empty;
+            }
+        }
+
+        // ====== 셀 꽉 채우기(cover) ======
+        // 원본 비율 유지 + 중앙 크롭(레터박스 없이 셀을 채움)
+        private static void DrawImageCover(Graphics g, System.Drawing.Image img, Rectangle dest)
+        {
+            if (img == null) return;
+
+            float scale = Math.Max(dest.Width / (float)img.Width, dest.Height / (float)img.Height);
+            int drawW = (int)Math.Ceiling(img.Width * scale);
+            int drawH = (int)Math.Ceiling(img.Height * scale);
+
+            int drawX = dest.X + (dest.Width - drawW) / 2;
+            int drawY = dest.Y + (dest.Height - drawH) / 2;
+
+            var srcRect = new Rectangle(0, 0, img.Width, img.Height);
+            var dstRect = new Rectangle(drawX, drawY, drawW, drawH);
+
+            var oldMode = g.InterpolationMode;
+            g.InterpolationMode = InterpolationMode.HighQualityBicubic;
+
+            g.DrawImage(img, dstRect, srcRect, GraphicsUnit.Pixel);
+
+            g.InterpolationMode = oldMode;
+        }
+
+        private static Bitmap ResizeBitmapHighQuality(Bitmap src, float scale)
+        {
+            int w = Math.Max(1, (int)Math.Round(src.Width * scale));
+            int h = Math.Max(1, (int)Math.Round(src.Height * scale));
+
+            var dst = new Bitmap(w, h, PixelFormat.Format32bppArgb);
+            dst.SetResolution(src.HorizontalResolution, src.VerticalResolution);
+
+            using (var g = Graphics.FromImage(dst))
+            {
+                g.CompositingMode = CompositingMode.SourceCopy;
+                g.CompositingQuality = CompositingQuality.HighQuality;
+                g.InterpolationMode = InterpolationMode.HighQualityBicubic;
+                g.SmoothingMode = SmoothingMode.HighQuality;
+                g.PixelOffsetMode = PixelOffsetMode.HighQuality;
+
+                using (var wrap = new ImageAttributes())
+                {
+                    wrap.SetWrapMode(WrapMode.TileFlipXY);
+                    g.DrawImage(src, new Rectangle(0, 0, w, h), 0, 0, src.Width, src.Height, GraphicsUnit.Pixel, wrap);
+                }
+            }
+
+            return dst;
         }
         static System.Drawing.Image LoadImage(string url)
         {
@@ -701,6 +850,67 @@ namespace DiscordBot
                 return new System.Drawing.Bitmap(11, 11);
             }
 
+        }
+        static System.Drawing.Image LoadImageOrPlaceholder(string url, int cellSize)
+        {
+            // URL이 비어있거나 이상한 경우 바로 플레이스홀더
+            if (string.IsNullOrWhiteSpace(url))
+                return CreateNoImagePlaceholder(cellSize, "NO IMAGE");
+
+            try
+            {
+                using (var wc = new WebClient())
+                using (var stream = wc.OpenRead(url))
+                using (var ms = new MemoryStream())
+                {
+                    // 스트림을 메모리로 복사해서 WebClient/stream dispose 영향 제거
+                    stream.CopyTo(ms);
+                    ms.Position = 0;
+
+                    using (var img = System.Drawing.Image.FromStream(ms))
+                    {
+                        // FromStream은 스트림 의존이 남을 수 있어 Bitmap으로 “고정” 복제
+                        return new Bitmap(img);
+                    }
+                }
+            }
+            catch
+            {
+                return CreateNoImagePlaceholder(cellSize, "NO IMAGE");
+            }
+        }
+        static Bitmap CreateNoImagePlaceholder(int size, string text)
+        {
+            var bmp = new Bitmap(size, size, PixelFormat.Format32bppArgb);
+
+            using (var g = Graphics.FromImage(bmp))
+            {
+                g.Clear(System.Drawing.Color.FromArgb(202, 192, 181)); // 셀 배경 톤(#CAC0B5)
+
+                // 대각선 크로스
+                using (var pen = new Pen(System.Drawing.Color.FromArgb(120, 120, 120), Math.Max(2, size / 40f)))
+                {
+                    g.SmoothingMode = SmoothingMode.HighQuality;
+                    g.DrawLine(pen, 6, 6, size - 6, size - 6);
+                    g.DrawLine(pen, size - 6, 6, 6, size - 6);
+                }
+
+                // 텍스트
+                using (var sf = new StringFormat { Alignment = StringAlignment.Center, LineAlignment = StringAlignment.Center })
+                using (var font = new Font("Arial", Math.Max(10, size / 7f), FontStyle.Bold, GraphicsUnit.Pixel))
+                using (var brush = new SolidBrush(System.Drawing.Color.FromArgb(80, 80, 80)))
+                {
+                    g.DrawString(text, font, brush, new RectangleF(0, 0, size, size), sf);
+                }
+
+                // 테두리
+                using (var border = new Pen(System.Drawing.Color.FromArgb(160, 160, 160), 1))
+                {
+                    g.DrawRectangle(border, 0, 0, size - 1, size - 1);
+                }
+            }
+
+            return bmp;
         }
 
         private string[] GetImagePaths(BattleEvent battleEvent)
@@ -827,15 +1037,15 @@ namespace DiscordBot
             var result = killer + victim + contributers + datetime;
             return result;
         }
-        private StringBuilder GetInventoryItems(Gear[]? inventory)
+        private string[] GetInventoryPaths(Gear[]? inventory)
         {
-            var gears = new StringBuilder();
+            List<string> paths = new List<string>();
             string? gearName;
             string? gearURL;
             int gearCount;
             int gearQuality;
 
-            foreach (var gear in inventory?.Select((g, i) => new { Value = g, Index = i })) 
+            foreach (var gear in inventory?.Select((g, i) => new { Value = g, Index = i }))
             {
                 if (gear.Value != null)
                 {
@@ -846,128 +1056,10 @@ namespace DiscordBot
                         gearURL = string.Empty;
                     else
                         gearURL = GetGearImageUrl(gearName, gearCount, gearQuality);
-                    gears.AppendLine($"[{gear.Index}]번째 칸: [{gearName}]({gearURL}) 수량:{gearCount}");
+                    paths.Add(gearURL);
                 }
             }
-            gears.AppendLine($"-----이하 비었음-----");
-
-            return gears;
-        }
-        private StringBuilder GetEquipmentContext(Equipment? equipment)
-        {
-            string? gearName;
-            string? gearURL;
-            int gearCount;
-            int gearQuality;
-            var gears = new StringBuilder();
-
-            if (equipment.MainHand != null)
-            {
-                gearCount = equipment.MainHand.Count;
-                gearQuality = equipment.MainHand.Quality;
-                gearName = equipment.MainHand.Type;
-                gearURL = GetGearImageUrl(gearName, gearCount, gearQuality); 
-                gears.AppendLine($"MainHand : [{gearName}]({ gearURL})");
-            }
-            else
-                gears.AppendLine($"MainHand : [없음]");
-
-            if (equipment.OffHand != null)
-            {
-                gearCount = equipment.OffHand.Count;
-                gearQuality = equipment.OffHand.Quality;
-                gearName = equipment.OffHand.Type;
-                gearURL = GetGearImageUrl(gearName, gearCount, gearQuality); 
-                gears.AppendLine($"OffHand  : [{gearName}]({ gearURL})");
-            }
-            else
-                gears.AppendLine($"OffHand  : [없음]");
-
-            if (equipment.Head != null)
-            {
-                gearCount = equipment.Head.Count;
-                gearQuality = equipment.Head.Quality;
-                gearName = equipment.Head.Type;
-                gearURL = GetGearImageUrl(gearName, gearCount, gearQuality); 
-                gears.AppendLine($"Head : [{gearName}]({ gearURL})");
-            }
-            else
-                gears.AppendLine($"Head : [없음]");
-
-            if (equipment.Armor != null) 
-            {
-                gearCount = equipment.Armor.Count;
-                gearQuality = equipment.Armor.Quality;
-                gearName = equipment.Armor.Type;
-                gearURL = GetGearImageUrl(gearName, gearCount, gearQuality); 
-                gears.AppendLine($"Armor    : [{gearName}]({ gearURL})");
-            }
-            else
-                gears.AppendLine($"Armor    : [없음]");
-
-            if (equipment.Shoes != null)
-            {
-                gearCount = equipment.Shoes.Count;
-                gearQuality = equipment.Shoes.Quality;
-                gearName = equipment.Shoes.Type;
-                gearURL = GetGearImageUrl(gearName, gearCount, gearQuality); 
-                gears.AppendLine($"Shoes    : [{gearName}]({ gearURL})");
-            }
-            else
-                gears.AppendLine($"Shoes    : [없음]");
-
-            if (equipment.Cape != null)
-            {
-                gearCount = equipment.Cape.Count;
-                gearQuality = equipment.Cape.Quality;
-                gearName = equipment.Cape.Type;
-                gearURL = GetGearImageUrl(gearName, gearCount, gearQuality); 
-                gears.AppendLine($"Cape : [{gearName}]({ gearURL})");
-            }
-            else
-                gears.AppendLine($"Cape : [없음]");
-
-            if (equipment.Potion != null)
-            {
-                gearCount = equipment.Potion.Count;
-                gearQuality = equipment.Potion.Quality;
-                gearName = equipment.Potion.Type;
-                gearURL = GetGearImageUrl(gearName, gearCount, gearQuality); 
-                gears.AppendLine($"Potion   : [{gearName}]({ gearURL})");
-            }
-            else
-                gears.AppendLine($"Potion   : [없음]");
-            if (equipment.Food != null)
-            {
-                gearCount = equipment.Food.Count;
-                gearQuality = equipment.Food.Quality;
-                gearName = equipment.Food.Type;
-                gearURL = GetGearImageUrl(gearName, gearCount, gearQuality); 
-                gears.AppendLine($"Food : [{gearName}]({ gearURL})");
-            }
-            else
-                gears.AppendLine($"Food : [없음]");
-            if (equipment.Mount != null)
-            {
-                gearCount = equipment.Mount.Count;
-                gearQuality = equipment.Mount.Quality;
-                gearName = equipment.Mount.Type;
-                gearURL = GetGearImageUrl(gearName, gearCount, gearQuality); 
-                gears.AppendLine($"Mount    : [{gearName}]({ gearURL})");
-            }
-            else
-                gears.AppendLine($"Mount    : [없음]");
-            if (equipment.Bag != null)
-            {
-                gearCount = equipment.Bag.Count;
-                gearQuality = equipment.Bag.Quality;
-                gearName = equipment.Bag.Type;
-                gearURL = GetGearImageUrl(gearName, gearCount, gearQuality); 
-                gears.AppendLine($"Bag  : [{gearName}]({ gearURL})");
-            }
-            else
-                gears.AppendLine($"Bag  : [없음]");
-            return gears;
+            return paths.ToArray();
         }
 
         /// <summary>
